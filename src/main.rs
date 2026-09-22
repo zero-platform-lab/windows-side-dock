@@ -51,6 +51,7 @@ struct LauncherApp {
     show_settings: bool,
     font_size: f32,
     popup_direction: PopupDirection,
+    drag_origin: Option<egui::Pos2>,
 }
 
 impl LauncherApp {
@@ -91,6 +92,7 @@ impl LauncherApp {
             show_settings: false,
             font_size: 13.0,
             popup_direction: load_popup_direction(),
+            drag_origin: None,
         };
         app.load_registered();
         app
@@ -201,6 +203,19 @@ impl LauncherApp {
 
 impl App for LauncherApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut Frame) {
+        let (is_fullscreen, is_maximized) = ctx.input(|input| {
+            let viewport = input.viewport();
+            (
+                viewport.fullscreen.unwrap_or(false),
+                viewport.maximized.unwrap_or(false),
+            )
+        });
+        if is_fullscreen {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(false));
+        }
+        if is_maximized {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(false));
+        }
         if self.last_refresh.elapsed() >= Duration::from_secs(1) {
             self.refresh_running();
             self.last_refresh = Instant::now();
@@ -288,7 +303,17 @@ impl App for LauncherApp {
                         );
                     }
                     if drag.drag_started() {
-                        ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
+                        self.drag_origin = launcher_window_position();
+                    }
+                    if drag.dragged() {
+                        if let Some(origin) = self.drag_origin {
+                            ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(
+                                origin + drag.drag_delta(),
+                            ));
+                        }
+                    }
+                    if drag.drag_stopped() {
+                        self.drag_origin = None;
                     }
                     let popup_align = self.popup_direction.alignment(ctx);
                     egui::Popup::context_menu(&drag)
@@ -489,35 +514,35 @@ impl LauncherApp {
         let mut launch_new = false;
         let mut activate_existing = false;
         let mut unpin = false;
-        egui::Popup::context_menu(&response)
-            .align(self.popup_direction.alignment(ctx))
-            .align_alternatives(&[])
-            .show(|ui| {
-                if ui
-                    .button(if is_running {
-                        "新しく起動"
-                    } else {
-                        "起動"
-                    })
-                    .clicked()
-                {
-                    launch_new = true;
-                    ui.close();
-                }
-                if is_running && ui.button("ウィンドウへ移動").clicked() {
-                    activate_existing = true;
-                    ui.close();
-                }
-                ui.separator();
-                if index >= 4 {
-                    if ui.button("ピン留めを外す").clicked() {
-                        unpin = true;
-                        ui.close();
-                    }
+        if response.secondary_clicked() {
+            let mut entries = vec![(
+                if is_running {
+                    "新しく起動"
                 } else {
-                    ui.add_enabled(false, egui::Button::new("標準アイコン"));
-                }
+                    "起動"
+                },
+                1,
+                true,
+            )];
+            if is_running {
+                entries.push(("ウィンドウへ移動", 2, true));
+            }
+            entries.push(("", 0, false));
+            entries.push(if index >= 4 {
+                ("ピン留めを外す", 3, true)
+            } else {
+                ("標準アイコン", 3, false)
             });
+            match show_native_context_menu(
+                &entries,
+                self.popup_direction.alignment(ctx) == egui::RectAlign::LEFT,
+            ) {
+                1 => launch_new = true,
+                2 => activate_existing = true,
+                3 if index >= 4 => unpin = true,
+                _ => {}
+            }
+        }
         if unpin {
             self.items.remove(index);
             self.selected = self.selected.min(self.items.len().saturating_sub(1));
@@ -580,23 +605,29 @@ impl LauncherApp {
             format!("{}（実行中）", item.name)
         };
         directional_tooltip(&response, &tooltip, self.popup_direction.alignment(ctx));
-        let popup_align = self.popup_direction.alignment(ctx);
-        egui::Popup::context_menu(&response)
-            .align(popup_align)
-            .align_alternatives(&[])
-            .show(|ui| {
-                if ui.button("ウィンドウへ移動").clicked() {
-                    activate = true;
-                    ui.close();
-                }
-                ui.separator();
-                if already_pinned {
-                    ui.add_enabled(false, egui::Button::new("ピン留め済み"));
-                } else if ui.button("ピン留めする").clicked() {
-                    pin = true;
-                    ui.close();
-                }
-            });
+        if response.secondary_clicked() {
+            let entries = [
+                ("ウィンドウへ移動", 1, true),
+                ("", 0, false),
+                (
+                    if already_pinned {
+                        "ピン留め済み"
+                    } else {
+                        "ピン留めする"
+                    },
+                    2,
+                    !already_pinned,
+                ),
+            ];
+            match show_native_context_menu(
+                &entries,
+                self.popup_direction.alignment(ctx) == egui::RectAlign::LEFT,
+            ) {
+                1 => activate = true,
+                2 if !already_pinned => pin = true,
+                _ => {}
+            }
+        }
         if pin {
             self.pin_running(index);
         } else if activate || response.clicked() {
@@ -646,6 +677,71 @@ fn open_target(target: &str) -> bool {
 #[cfg(not(windows))]
 fn open_target(_target: &str) -> bool {
     false
+}
+
+#[cfg(windows)]
+fn show_native_context_menu(entries: &[(&str, u32, bool)], open_left: bool) -> u32 {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Foundation::POINT;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        AppendMenuW, CreatePopupMenu, DestroyMenu, FindWindowW, GetCursorPos, SetForegroundWindow,
+        TrackPopupMenuEx, MF_GRAYED, MF_SEPARATOR, MF_STRING, TPM_LEFTALIGN, TPM_RETURNCMD,
+        TPM_RIGHTALIGN,
+    };
+
+    let menu = unsafe { CreatePopupMenu() };
+    if menu.is_null() {
+        return 0;
+    }
+    for &(label, command, enabled) in entries {
+        if label.is_empty() {
+            unsafe { AppendMenuW(menu, MF_SEPARATOR, 0, std::ptr::null()) };
+        } else {
+            let wide: Vec<u16> = std::ffi::OsStr::new(label)
+                .encode_wide()
+                .chain(Some(0))
+                .collect();
+            let flags = if enabled {
+                MF_STRING
+            } else {
+                MF_STRING | MF_GRAYED
+            };
+            unsafe { AppendMenuW(menu, flags, command as usize, wide.as_ptr()) };
+        }
+    }
+    let title: Vec<u16> = std::ffi::OsStr::new("ランチャー")
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
+    let owner = unsafe { FindWindowW(std::ptr::null(), title.as_ptr()) };
+    let mut cursor = POINT::default();
+    let command = if owner.is_null() || unsafe { GetCursorPos(&mut cursor) } == 0 {
+        0
+    } else {
+        unsafe { SetForegroundWindow(owner) };
+        let alignment = if open_left {
+            TPM_RIGHTALIGN
+        } else {
+            TPM_LEFTALIGN
+        };
+        unsafe {
+            TrackPopupMenuEx(
+                menu,
+                TPM_RETURNCMD | alignment,
+                cursor.x,
+                cursor.y,
+                owner,
+                std::ptr::null(),
+            ) as u32
+        }
+    };
+    unsafe { DestroyMenu(menu) };
+    command
+}
+
+#[cfg(not(windows))]
+fn show_native_context_menu(_entries: &[(&str, u32, bool)], _open_left: bool) -> u32 {
+    0
 }
 
 #[cfg(windows)]
@@ -998,6 +1094,30 @@ fn popup_should_open_left(_ctx: &egui::Context) -> bool {
     (rect.left + rect.right) / 2 > screen_width / 2
 }
 
+#[cfg(windows)]
+fn launcher_window_position() -> Option<egui::Pos2> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Foundation::RECT;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{FindWindowW, GetWindowRect};
+
+    let title: Vec<u16> = std::ffi::OsStr::new("ランチャー")
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
+    let window = unsafe { FindWindowW(std::ptr::null(), title.as_ptr()) };
+    let mut rect = RECT::default();
+    if window.is_null() || unsafe { GetWindowRect(window, &mut rect) } == 0 {
+        None
+    } else {
+        Some(egui::pos2(rect.left as f32, rect.top as f32))
+    }
+}
+
+#[cfg(not(windows))]
+fn launcher_window_position() -> Option<egui::Pos2> {
+    None
+}
+
 #[cfg(not(windows))]
 fn popup_should_open_left(ctx: &egui::Context) -> bool {
     ctx.input(|input| {
@@ -1131,6 +1251,8 @@ fn main() -> eframe::Result {
             .with_position(position)
             .with_decorations(false)
             .with_resizable(true)
+            .with_fullscreen(false)
+            .with_maximized(false)
             .with_transparent(true)
             .with_title("ランチャー"),
         ..Default::default()
