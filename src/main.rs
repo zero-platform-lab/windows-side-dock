@@ -90,7 +90,7 @@ impl LauncherApp {
             last_refresh: Instant::now() - Duration::from_secs(2),
             show_settings: false,
             font_size: 13.0,
-            popup_direction: PopupDirection::Auto,
+            popup_direction: load_popup_direction(),
         };
         app.load_registered();
         app
@@ -368,7 +368,7 @@ impl App for LauncherApp {
             });
 
         if self.show_settings {
-            let position = settings_dialog_position(ctx);
+            let position = settings_dialog_position(ctx, self.popup_direction);
             ctx.show_viewport_immediate(
                 egui::ViewportId::from_hash_of("launcher-settings"),
                 egui::ViewportBuilder::default()
@@ -391,9 +391,24 @@ impl App for LauncherApp {
                         ui.add(egui::Slider::new(&mut self.font_size, 10.0..=20.0).suffix(" px"));
                         ui.add_space(8.0);
                         ui.label("ポップアップの方向");
-                        ui.radio_value(&mut self.popup_direction, PopupDirection::Auto, "自動");
-                        ui.radio_value(&mut self.popup_direction, PopupDirection::Left, "常に左");
-                        ui.radio_value(&mut self.popup_direction, PopupDirection::Right, "常に右");
+                        let direction_changed = ui
+                            .radio_value(&mut self.popup_direction, PopupDirection::Auto, "自動")
+                            .changed()
+                            | ui.radio_value(
+                                &mut self.popup_direction,
+                                PopupDirection::Left,
+                                "常に左",
+                            )
+                            .changed()
+                            | ui.radio_value(
+                                &mut self.popup_direction,
+                                PopupDirection::Right,
+                                "常に右",
+                            )
+                            .changed();
+                        if direction_changed {
+                            save_popup_direction(self.popup_direction);
+                        }
                         settings_ctx.style_mut(|style| {
                             if let Some(font) = style.text_styles.get_mut(&egui::TextStyle::Body) {
                                 font.size = self.font_size;
@@ -931,6 +946,34 @@ fn config_path() -> Option<PathBuf> {
     std::env::var_os("LOCALAPPDATA").map(|root| PathBuf::from(root).join(r"lancher\items.txt"))
 }
 
+fn settings_path() -> Option<PathBuf> {
+    std::env::var_os("LOCALAPPDATA").map(|root| PathBuf::from(root).join(r"lancher\settings.txt"))
+}
+
+fn load_popup_direction() -> PopupDirection {
+    let Some(path) = settings_path() else {
+        return PopupDirection::Auto;
+    };
+    match std::fs::read_to_string(path).as_deref().map(str::trim) {
+        Ok("left") => PopupDirection::Left,
+        Ok("right") => PopupDirection::Right,
+        _ => PopupDirection::Auto,
+    }
+}
+
+fn save_popup_direction(direction: PopupDirection) {
+    let Some(path) = settings_path() else { return };
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let value = match direction {
+        PopupDirection::Auto => "auto",
+        PopupDirection::Left => "left",
+        PopupDirection::Right => "right",
+    };
+    let _ = std::fs::write(path, value);
+}
+
 #[cfg(windows)]
 fn popup_should_open_left(_ctx: &egui::Context) -> bool {
     use std::os::windows::ffi::OsStrExt;
@@ -975,7 +1018,7 @@ fn popup_alignment(ctx: &egui::Context) -> egui::RectAlign {
 }
 
 #[cfg(windows)]
-fn settings_dialog_position(ctx: &egui::Context) -> egui::Pos2 {
+fn settings_dialog_position(ctx: &egui::Context, direction: PopupDirection) -> egui::Pos2 {
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Foundation::RECT;
     use windows_sys::Win32::UI::WindowsAndMessaging::{FindWindowW, GetWindowRect};
@@ -987,7 +1030,12 @@ fn settings_dialog_position(ctx: &egui::Context) -> egui::Pos2 {
     let window = unsafe { FindWindowW(std::ptr::null(), title.as_ptr()) };
     let mut rect = RECT::default();
     if !window.is_null() && unsafe { GetWindowRect(window, &mut rect) } != 0 {
-        let x = if popup_should_open_left(ctx) {
+        let open_left = match direction {
+            PopupDirection::Auto => popup_should_open_left(ctx),
+            PopupDirection::Left => true,
+            PopupDirection::Right => false,
+        };
+        let x = if open_left {
             rect.left as f32 - 332.0
         } else {
             rect.right as f32 + 12.0
@@ -999,7 +1047,7 @@ fn settings_dialog_position(ctx: &egui::Context) -> egui::Pos2 {
 }
 
 #[cfg(not(windows))]
-fn settings_dialog_position(_ctx: &egui::Context) -> egui::Pos2 {
+fn settings_dialog_position(_ctx: &egui::Context, _direction: PopupDirection) -> egui::Pos2 {
     egui::pos2(100.0, 100.0)
 }
 
