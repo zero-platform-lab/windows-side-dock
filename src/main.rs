@@ -4,7 +4,6 @@ use eframe::egui::{self, Color32, Key};
 use eframe::{App, Frame};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::time::{Duration, Instant};
 
 #[derive(Clone, Copy)]
@@ -152,14 +151,7 @@ impl LauncherApp {
             return;
         }
         let command = self.items[index].command.clone();
-        let mut process = Command::new("cmd");
-        process.args(["/C", "start", "", &command]);
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            process.creation_flags(0x08000000);
-        }
-        let _ = process.spawn();
+        let _ = open_target(&command);
     }
 
     fn refresh_running(&mut self) {
@@ -602,6 +594,38 @@ fn item(name: &str, command: &str, fallback_icon: IconKind, icon_source: &str) -
         windows: Vec::new(),
         active: false,
     }
+}
+
+#[cfg(windows)]
+fn open_target(target: &str) -> bool {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::UI::Shell::ShellExecuteW;
+    use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+    let operation: Vec<u16> = std::ffi::OsStr::new("open")
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
+    let target: Vec<u16> = std::ffi::OsStr::new(target)
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
+    let result = unsafe {
+        ShellExecuteW(
+            std::ptr::null_mut(),
+            operation.as_ptr(),
+            target.as_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            SW_SHOWNORMAL,
+        )
+    } as isize;
+    result > 32
+}
+
+#[cfg(not(windows))]
+fn open_target(_target: &str) -> bool {
+    false
 }
 
 #[cfg(windows)]
