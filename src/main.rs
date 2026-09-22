@@ -1172,9 +1172,74 @@ fn settings_dialog_position(_ctx: &egui::Context, _direction: PopupDirection) ->
 }
 
 fn directional_tooltip(response: &egui::Response, text: &str, alignment: egui::RectAlign) {
-    let mut tooltip = egui::Tooltip::for_enabled(response);
-    tooltip.popup = tooltip.popup.align(alignment).align_alternatives(&[]);
-    tooltip.show(|ui| ui.label(text));
+    if !egui::Tooltip::should_show_tooltip(response, false) {
+        return;
+    }
+    let Some(position) = tooltip_screen_position(response, alignment == egui::RectAlign::LEFT)
+    else {
+        return;
+    };
+    let tooltip_text = text.to_owned();
+    response.ctx.show_viewport_immediate(
+        egui::ViewportId::from_hash_of(("launcher-tooltip", response.id)),
+        egui::ViewportBuilder::default()
+            .with_title("Launcher tooltip")
+            .with_inner_size([220.0, 36.0])
+            .with_position(position)
+            .with_decorations(false)
+            .with_resizable(false)
+            .with_transparent(true)
+            .with_taskbar(false)
+            .with_mouse_passthrough(true)
+            .with_always_on_top(),
+        |tooltip_ctx, _class| {
+            egui::CentralPanel::default()
+                .frame(
+                    egui::Frame::new()
+                        .fill(Color32::from_rgba_unmultiplied(14, 16, 21, 248))
+                        .stroke(egui::Stroke::new(1.0_f32, Color32::from_gray(85)))
+                        .corner_radius(6.0)
+                        .inner_margin(egui::Margin::symmetric(10, 7)),
+                )
+                .show(tooltip_ctx, |ui| {
+                    ui.label(&tooltip_text);
+                });
+        },
+    );
+}
+
+#[cfg(windows)]
+fn tooltip_screen_position(response: &egui::Response, open_left: bool) -> Option<egui::Pos2> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Foundation::RECT;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{FindWindowW, GetWindowRect};
+
+    let title: Vec<u16> = std::ffi::OsStr::new("ランチャー")
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
+    let window = unsafe { FindWindowW(std::ptr::null(), title.as_ptr()) };
+    let mut rect = RECT::default();
+    if window.is_null() || unsafe { GetWindowRect(window, &mut rect) } == 0 {
+        return None;
+    }
+    let x = if open_left {
+        rect.left as f32 - 228.0
+    } else {
+        rect.right as f32 + 8.0
+    };
+    let y = rect.top as f32 + response.rect.center().y - 18.0;
+    Some(egui::pos2(x, y.max(0.0)))
+}
+
+#[cfg(not(windows))]
+fn tooltip_screen_position(response: &egui::Response, open_left: bool) -> Option<egui::Pos2> {
+    let x = if open_left {
+        response.rect.left() - 228.0
+    } else {
+        response.rect.right() + 8.0
+    };
+    Some(egui::pos2(x, response.rect.top()))
 }
 
 #[cfg(windows)]
