@@ -22,6 +22,13 @@ enum PopupDirection {
     Right,
 }
 
+#[derive(Clone, Copy)]
+enum ContextMenuTarget {
+    Handle,
+    Pinned(usize),
+    Running(usize),
+}
+
 impl PopupDirection {
     fn alignment(self, ctx: &egui::Context) -> egui::RectAlign {
         match self {
@@ -52,6 +59,7 @@ struct LauncherApp {
     font_size: f32,
     popup_direction: PopupDirection,
     drag_origin: Option<egui::Pos2>,
+    context_menu: Option<(ContextMenuTarget, egui::Pos2, Instant)>,
 }
 
 impl LauncherApp {
@@ -93,6 +101,7 @@ impl LauncherApp {
             font_size: 13.0,
             popup_direction: load_popup_direction(),
             drag_origin: None,
+            context_menu: None,
         };
         app.load_registered();
         app
@@ -315,16 +324,14 @@ impl App for LauncherApp {
                     if drag.drag_stopped() {
                         self.drag_origin = None;
                     }
-                    let popup_align = self.popup_direction.alignment(ctx);
-                    egui::Popup::context_menu(&drag)
-                        .align(popup_align)
-                        .align_alternatives(&[])
-                        .show(|ui| {
-                            if ui.button("表示設定").clicked() {
-                                self.show_settings = true;
-                                ui.close();
-                            }
-                        });
+                    if drag.secondary_clicked() {
+                        if let Some(position) = context_menu_screen_position(
+                            self.popup_direction.alignment(ctx) == egui::RectAlign::LEFT,
+                        ) {
+                            self.context_menu =
+                                Some((ContextMenuTarget::Handle, position, Instant::now()));
+                        }
+                    }
                     ui.add_space(3.0);
                     let (settings_rect, settings_response) =
                         ui.allocate_exact_size(egui::vec2(40.0, 40.0), egui::Sense::click());
@@ -452,10 +459,128 @@ impl App for LauncherApp {
                 },
             );
         }
+        self.show_context_menu_viewport(ctx);
     }
 }
 
 impl LauncherApp {
+    fn show_context_menu_viewport(&mut self, ctx: &egui::Context) {
+        let Some((target, position, opened_at)) = self.context_menu else {
+            return;
+        };
+        let height = match target {
+            ContextMenuTarget::Handle => 54.0,
+            ContextMenuTarget::Pinned(index) => {
+                if self
+                    .items
+                    .get(index)
+                    .is_some_and(|item| !item.windows.is_empty())
+                {
+                    126.0
+                } else {
+                    92.0
+                }
+            }
+            ContextMenuTarget::Running(_) => 92.0,
+        };
+        let mut close = false;
+        ctx.show_viewport_immediate(
+            egui::ViewportId::from_hash_of("launcher-context-menu"),
+            egui::ViewportBuilder::default()
+                .with_title("Launcher menu")
+                .with_inner_size([210.0, height])
+                .with_position(position)
+                .with_decorations(false)
+                .with_resizable(false)
+                .with_transparent(true)
+                .with_taskbar(false)
+                .with_always_on_top()
+                .with_active(true),
+            |menu_ctx, _class| {
+                if menu_ctx.input(|input| {
+                    input.viewport().close_requested()
+                        || input.key_pressed(Key::Escape)
+                        || (opened_at.elapsed() > Duration::from_millis(200)
+                            && input.viewport().focused == Some(false))
+                }) {
+                    close = true;
+                }
+                egui::CentralPanel::default()
+                    .frame(
+                        egui::Frame::new()
+                            .fill(Color32::from_rgba_unmultiplied(12, 14, 19, 252))
+                            .stroke(egui::Stroke::new(1.0_f32, Color32::from_gray(80)))
+                            .corner_radius(8.0)
+                            .inner_margin(egui::Margin::symmetric(8, 7)),
+                    )
+                    .show(menu_ctx, |ui| match target {
+                        ContextMenuTarget::Handle => {
+                            if ui.button("表示設定").clicked() {
+                                self.show_settings = true;
+                                close = true;
+                            }
+                        }
+                        ContextMenuTarget::Pinned(index) => {
+                            if index >= self.items.len() {
+                                close = true;
+                                return;
+                            }
+                            let is_running = !self.items[index].windows.is_empty();
+                            if ui
+                                .button(if is_running {
+                                    "新しく起動"
+                                } else {
+                                    "起動"
+                                })
+                                .clicked()
+                            {
+                                self.launch(index);
+                                close = true;
+                            }
+                            if is_running && ui.button("ウィンドウへ移動").clicked() {
+                                activate_taskbar_item(&self.items[index].windows);
+                                close = true;
+                            }
+                            ui.separator();
+                            if index >= 4 {
+                                if ui.button("ピン留めを外す").clicked() {
+                                    self.items.remove(index);
+                                    self.selected =
+                                        self.selected.min(self.items.len().saturating_sub(1));
+                                    self.save_registered();
+                                    self.refresh_running();
+                                    close = true;
+                                }
+                            } else {
+                                ui.add_enabled(false, egui::Button::new("標準アイコン"));
+                            }
+                        }
+                        ContextMenuTarget::Running(index) => {
+                            if index >= self.running.len() {
+                                close = true;
+                                return;
+                            }
+                            if ui.button("ウィンドウへ移動").clicked() {
+                                self.activate_running(index);
+                                close = true;
+                            }
+                            ui.separator();
+                            if ui.button("ピン留めする").clicked() {
+                                self.pin_running(index);
+                                close = true;
+                            }
+                        }
+                    });
+                if close {
+                    menu_ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                }
+            },
+        );
+        if close {
+            self.context_menu = None;
+        }
+    }
+
     fn icon_button(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, index: usize) {
         let item = &self.items[index];
         let selected = index == self.selected;
@@ -510,47 +635,15 @@ impl LauncherApp {
             draw_icon(ui.painter(), rect.shrink(10.0), item.fallback_icon);
         }
         directional_tooltip(&response, &item.name, self.popup_direction.alignment(ctx));
-        let is_running = !item.windows.is_empty();
-        let mut launch_new = false;
-        let mut activate_existing = false;
-        let mut unpin = false;
         if response.secondary_clicked() {
-            let mut entries = vec![(
-                if is_running {
-                    "新しく起動"
-                } else {
-                    "起動"
-                },
-                1,
-                true,
-            )];
-            if is_running {
-                entries.push(("ウィンドウへ移動", 2, true));
-            }
-            entries.push(("", 0, false));
-            entries.push(if index >= 4 {
-                ("ピン留めを外す", 3, true)
-            } else {
-                ("標準アイコン", 3, false)
-            });
-            match show_native_context_menu(
-                &entries,
+            if let Some(position) = context_menu_screen_position(
                 self.popup_direction.alignment(ctx) == egui::RectAlign::LEFT,
             ) {
-                1 => launch_new = true,
-                2 => activate_existing = true,
-                3 if index >= 4 => unpin = true,
-                _ => {}
+                self.context_menu =
+                    Some((ContextMenuTarget::Pinned(index), position, Instant::now()));
             }
         }
-        if unpin {
-            self.items.remove(index);
-            self.selected = self.selected.min(self.items.len().saturating_sub(1));
-            self.save_registered();
-            self.refresh_running();
-        } else if activate_existing {
-            activate_taskbar_item(&self.items[index].windows);
-        } else if launch_new || response.clicked() {
+        if response.clicked() {
             self.selected = index;
             self.launch(index);
         }
@@ -592,12 +685,6 @@ impl LauncherApp {
         } else {
             draw_icon(ui.painter(), rect.shrink(10.0), item.fallback_icon);
         }
-        let mut pin = false;
-        let mut activate = false;
-        let already_pinned = self
-            .items
-            .iter()
-            .any(|pinned| pinned.command.eq_ignore_ascii_case(&item.command));
         let window_count = item.windows.len();
         let tooltip = if window_count > 1 {
             format!("{}（{}個のウィンドウ）", item.name, window_count)
@@ -606,31 +693,14 @@ impl LauncherApp {
         };
         directional_tooltip(&response, &tooltip, self.popup_direction.alignment(ctx));
         if response.secondary_clicked() {
-            let entries = [
-                ("ウィンドウへ移動", 1, true),
-                ("", 0, false),
-                (
-                    if already_pinned {
-                        "ピン留め済み"
-                    } else {
-                        "ピン留めする"
-                    },
-                    2,
-                    !already_pinned,
-                ),
-            ];
-            match show_native_context_menu(
-                &entries,
+            if let Some(position) = context_menu_screen_position(
                 self.popup_direction.alignment(ctx) == egui::RectAlign::LEFT,
             ) {
-                1 => activate = true,
-                2 if !already_pinned => pin = true,
-                _ => {}
+                self.context_menu =
+                    Some((ContextMenuTarget::Running(index), position, Instant::now()));
             }
         }
-        if pin {
-            self.pin_running(index);
-        } else if activate || response.clicked() {
+        if response.clicked() {
             self.activate_running(index);
         }
     }
@@ -677,71 +747,6 @@ fn open_target(target: &str) -> bool {
 #[cfg(not(windows))]
 fn open_target(_target: &str) -> bool {
     false
-}
-
-#[cfg(windows)]
-fn show_native_context_menu(entries: &[(&str, u32, bool)], open_left: bool) -> u32 {
-    use std::os::windows::ffi::OsStrExt;
-    use windows_sys::Win32::Foundation::POINT;
-    use windows_sys::Win32::UI::WindowsAndMessaging::{
-        AppendMenuW, CreatePopupMenu, DestroyMenu, FindWindowW, GetCursorPos, SetForegroundWindow,
-        TrackPopupMenuEx, MF_GRAYED, MF_SEPARATOR, MF_STRING, TPM_LEFTALIGN, TPM_RETURNCMD,
-        TPM_RIGHTALIGN,
-    };
-
-    let menu = unsafe { CreatePopupMenu() };
-    if menu.is_null() {
-        return 0;
-    }
-    for &(label, command, enabled) in entries {
-        if label.is_empty() {
-            unsafe { AppendMenuW(menu, MF_SEPARATOR, 0, std::ptr::null()) };
-        } else {
-            let wide: Vec<u16> = std::ffi::OsStr::new(label)
-                .encode_wide()
-                .chain(Some(0))
-                .collect();
-            let flags = if enabled {
-                MF_STRING
-            } else {
-                MF_STRING | MF_GRAYED
-            };
-            unsafe { AppendMenuW(menu, flags, command as usize, wide.as_ptr()) };
-        }
-    }
-    let title: Vec<u16> = std::ffi::OsStr::new("ランチャー")
-        .encode_wide()
-        .chain(Some(0))
-        .collect();
-    let owner = unsafe { FindWindowW(std::ptr::null(), title.as_ptr()) };
-    let mut cursor = POINT::default();
-    let command = if owner.is_null() || unsafe { GetCursorPos(&mut cursor) } == 0 {
-        0
-    } else {
-        unsafe { SetForegroundWindow(owner) };
-        let alignment = if open_left {
-            TPM_RIGHTALIGN
-        } else {
-            TPM_LEFTALIGN
-        };
-        unsafe {
-            TrackPopupMenuEx(
-                menu,
-                TPM_RETURNCMD | alignment,
-                cursor.x,
-                cursor.y,
-                owner,
-                std::ptr::null(),
-            ) as u32
-        }
-    };
-    unsafe { DestroyMenu(menu) };
-    command
-}
-
-#[cfg(not(windows))]
-fn show_native_context_menu(_entries: &[(&str, u32, bool)], _open_left: bool) -> u32 {
-    0
 }
 
 #[cfg(windows)]
@@ -1206,6 +1211,27 @@ fn directional_tooltip(response: &egui::Response, text: &str, alignment: egui::R
                 });
         },
     );
+}
+
+#[cfg(windows)]
+fn context_menu_screen_position(open_left: bool) -> Option<egui::Pos2> {
+    use windows_sys::Win32::Foundation::POINT;
+    use windows_sys::Win32::UI::WindowsAndMessaging::GetCursorPos;
+    let mut cursor = POINT::default();
+    if unsafe { GetCursorPos(&mut cursor) } == 0 {
+        return None;
+    }
+    let x = if open_left {
+        cursor.x as f32 - 218.0
+    } else {
+        cursor.x as f32 + 8.0
+    };
+    Some(egui::pos2(x, cursor.y as f32))
+}
+
+#[cfg(not(windows))]
+fn context_menu_screen_position(_open_left: bool) -> Option<egui::Pos2> {
+    Some(egui::pos2(100.0, 100.0))
 }
 
 #[cfg(windows)]
