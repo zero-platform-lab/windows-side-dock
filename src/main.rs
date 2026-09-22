@@ -471,19 +471,26 @@ impl LauncherApp {
         }
         directional_tooltip(&response, &item.name, self.popup_direction.alignment(ctx));
         let is_running = !item.windows.is_empty();
-        let mut open_item = false;
+        let mut launch_new = false;
+        let mut activate_existing = false;
         let mut unpin = false;
         egui::Popup::context_menu(&response)
             .align(self.popup_direction.alignment(ctx))
             .align_alternatives(&[])
             .show(|ui| {
-                let label = if is_running {
-                    "ウィンドウへ移動"
-                } else {
-                    "起動"
-                };
-                if ui.button(label).clicked() {
-                    open_item = true;
+                if ui
+                    .button(if is_running {
+                        "新しく起動"
+                    } else {
+                        "起動"
+                    })
+                    .clicked()
+                {
+                    launch_new = true;
+                    ui.close();
+                }
+                if is_running && ui.button("ウィンドウへ移動").clicked() {
+                    activate_existing = true;
                     ui.close();
                 }
                 ui.separator();
@@ -501,13 +508,11 @@ impl LauncherApp {
             self.selected = self.selected.min(self.items.len().saturating_sub(1));
             self.save_registered();
             self.refresh_running();
-        } else if open_item || response.clicked() {
+        } else if activate_existing {
+            activate_taskbar_item(&self.items[index].windows);
+        } else if launch_new || response.clicked() {
             self.selected = index;
-            if self.items[index].windows.is_empty() {
-                self.launch(index);
-            } else {
-                activate_taskbar_item(&self.items[index].windows);
-            }
+            self.launch(index);
         }
     }
 
