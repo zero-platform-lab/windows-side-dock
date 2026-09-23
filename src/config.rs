@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum PopupDirection {
@@ -13,12 +13,53 @@ pub(crate) enum ProcessTool {
     ProcessExplorer,
 }
 
-fn legacy_config_file(name: &str) -> Option<PathBuf> {
-    std::env::var_os("LOCALAPPDATA").map(|root| PathBuf::from(root).join("lancher").join(name))
+/// 旧アプリ名との互換性のため、保存先フォルダーは `lancher` のまま使う。
+fn config_file_in(local_app_data: &Path, name: &str) -> PathBuf {
+    local_app_data.join("lancher").join(name)
 }
 
-pub(crate) fn config_path() -> Option<PathBuf> {
+fn legacy_config_file(name: &str) -> Option<PathBuf> {
+    std::env::var_os("LOCALAPPDATA").map(|root| config_file_in(Path::new(&root), name))
+}
+
+fn read_setting(path: Option<PathBuf>) -> Option<String> {
+    path.and_then(|path| std::fs::read_to_string(path).ok())
+}
+
+fn write_setting(path: Option<PathBuf>, value: &str) {
+    let Some(path) = path else { return };
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let _ = std::fs::write(path, value);
+}
+
+fn config_path() -> Option<PathBuf> {
     legacy_config_file("items.txt")
+}
+
+/// `items.txt` の各行 `名前|コマンド` を読み取る。区切りのない行は無視する。
+fn parse_registered_items(contents: &str) -> Vec<(String, String)> {
+    contents
+        .lines()
+        .filter_map(|line| line.split_once('|'))
+        .map(|(name, command)| (name.to_owned(), command.to_owned()))
+        .collect()
+}
+
+fn format_registered_items<'a>(items: impl Iterator<Item = (&'a str, &'a str)>) -> String {
+    items
+        .map(|(name, command)| format!("{}|{}", name.replace('|', " "), command.replace('|', " ")))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+pub(crate) fn load_registered_items() -> Vec<(String, String)> {
+    read_setting(config_path()).map_or_else(Vec::new, |contents| parse_registered_items(&contents))
+}
+
+pub(crate) fn save_registered_items<'a>(items: impl Iterator<Item = (&'a str, &'a str)>) {
+    write_setting(config_path(), &format_registered_items(items));
 }
 
 fn settings_path() -> Option<PathBuf> {
@@ -33,23 +74,21 @@ fn parse_popup_direction(value: &str) -> PopupDirection {
     }
 }
 
+fn popup_direction_value(direction: PopupDirection) -> &'static str {
+    match direction {
+        PopupDirection::Auto => "auto",
+        PopupDirection::Left => "left",
+        PopupDirection::Right => "right",
+    }
+}
+
 pub(crate) fn load_popup_direction() -> PopupDirection {
-    settings_path()
-        .and_then(|path| std::fs::read_to_string(path).ok())
+    read_setting(settings_path())
         .map_or(PopupDirection::Auto, |value| parse_popup_direction(&value))
 }
 
 pub(crate) fn save_popup_direction(direction: PopupDirection) {
-    let Some(path) = settings_path() else { return };
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let value = match direction {
-        PopupDirection::Auto => "auto",
-        PopupDirection::Left => "left",
-        PopupDirection::Right => "right",
-    };
-    let _ = std::fs::write(path, value);
+    write_setting(settings_path(), popup_direction_value(direction));
 }
 
 fn process_tool_path() -> Option<PathBuf> {
@@ -67,41 +106,30 @@ fn parse_process_tool(value: &str) -> ProcessTool {
     }
 }
 
+fn process_tool_value(tool: ProcessTool) -> &'static str {
+    match tool {
+        ProcessTool::TaskManager => "task_manager",
+        ProcessTool::ProcessExplorer => "process_explorer",
+    }
+}
+
 pub(crate) fn load_process_tool() -> ProcessTool {
-    process_tool_path()
-        .and_then(|path| std::fs::read_to_string(path).ok())
+    read_setting(process_tool_path())
         .map_or(ProcessTool::TaskManager, |value| parse_process_tool(&value))
 }
 
 pub(crate) fn save_process_tool(tool: ProcessTool) {
-    let Some(path) = process_tool_path() else {
-        return;
-    };
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let value = match tool {
-        ProcessTool::TaskManager => "task_manager",
-        ProcessTool::ProcessExplorer => "process_explorer",
-    };
-    let _ = std::fs::write(path, value);
+    write_setting(process_tool_path(), process_tool_value(tool));
 }
 
 pub(crate) fn load_process_explorer_path() -> String {
-    process_explorer_path_file()
-        .and_then(|path| std::fs::read_to_string(path).ok())
+    read_setting(process_explorer_path_file())
         .map(|value| value.trim().to_owned())
         .unwrap_or_default()
 }
 
 pub(crate) fn save_process_explorer_path(value: &str) {
-    let Some(path) = process_explorer_path_file() else {
-        return;
-    };
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let _ = std::fs::write(path, value.trim());
+    write_setting(process_explorer_path_file(), value.trim());
 }
 
 #[cfg(windows)]
@@ -167,8 +195,68 @@ mod tests {
     }
 
     #[test]
+    fn stored_values_round_trip() {
+        for direction in [
+            PopupDirection::Auto,
+            PopupDirection::Left,
+            PopupDirection::Right,
+        ] {
+            assert_eq!(
+                parse_popup_direction(popup_direction_value(direction)),
+                direction
+            );
+        }
+        for tool in [ProcessTool::TaskManager, ProcessTool::ProcessExplorer] {
+            assert_eq!(parse_process_tool(process_tool_value(tool)), tool);
+        }
+    }
+
+    #[test]
     fn legacy_paths_remain_compatible() {
-        let path = PathBuf::from("root").join("lancher").join("items.txt");
-        assert!(path.ends_with(PathBuf::from("lancher").join("items.txt")));
+        let root = Path::new(r"C:\Users\me\AppData\Local");
+        assert_eq!(
+            config_file_in(root, "items.txt"),
+            root.join("lancher").join("items.txt")
+        );
+    }
+
+    #[test]
+    fn parses_registered_items_and_skips_malformed_lines() {
+        let items =
+            parse_registered_items("Code|C:\\Apps\\Code.exe\r\nbroken line\nURL|https://a/b|c\n");
+        assert_eq!(
+            items,
+            [
+                ("Code".to_owned(), r"C:\Apps\Code.exe".to_owned()),
+                ("URL".to_owned(), "https://a/b|c".to_owned()),
+            ]
+        );
+    }
+
+    #[test]
+    fn registered_items_round_trip_and_replace_separators() {
+        let text =
+            format_registered_items([("A|B", r"C:\a.exe"), ("メモ帳", r"C:\x|y.exe")].into_iter());
+        assert_eq!(text, "A B|C:\\a.exe\nメモ帳|C:\\x y.exe");
+        assert_eq!(
+            parse_registered_items(&text),
+            [
+                ("A B".to_owned(), r"C:\a.exe".to_owned()),
+                ("メモ帳".to_owned(), r"C:\x y.exe".to_owned()),
+            ]
+        );
+    }
+
+    #[test]
+    fn writes_settings_into_missing_folders() {
+        let root = std::env::temp_dir().join(format!("wsd-config-test-{}", std::process::id()));
+        let path = config_file_in(&root, "settings.txt");
+        write_setting(Some(path.clone()), "left");
+        assert_eq!(read_setting(Some(path)).as_deref(), Some("left"));
+        assert_eq!(
+            read_setting(Some(config_file_in(&root, "missing.txt"))),
+            None
+        );
+        let _ = std::fs::remove_dir_all(root);
     }
 }

@@ -1,6 +1,6 @@
 use crate::config::{
-    config_path, load_popup_direction, load_process_explorer_path, load_process_tool,
-    PopupDirection, ProcessTool,
+    load_popup_direction, load_process_explorer_path, load_process_tool, load_registered_items,
+    save_registered_items, PopupDirection, ProcessTool,
 };
 use crate::layout::{popup_alignment, window_picker_screen_position};
 use crate::model::{same_application, IconKind, LauncherItem, RunningWindow};
@@ -98,39 +98,21 @@ impl LauncherApp {
     }
 
     fn load_registered(&mut self) {
-        let Some(path) = config_path() else { return };
-        let Ok(contents) = std::fs::read_to_string(path) else {
-            return;
-        };
-        for line in contents.lines() {
-            if let Some((name, command)) = line.split_once('|') {
-                if !self.items.iter().any(|item| item.command == command) {
-                    self.items
-                        .push(item(name, command, IconKind::File, command));
-                }
+        for (name, command) in load_registered_items() {
+            if !self.items.iter().any(|item| item.command == command) {
+                self.items
+                    .push(item(&name, &command, IconKind::File, &command));
             }
         }
     }
 
     pub(crate) fn save_registered(&self) {
-        let Some(path) = config_path() else { return };
-        if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        let text = self
-            .items
-            .iter()
-            .skip(4)
-            .map(|item| {
-                format!(
-                    "{}|{}",
-                    item.name.replace('|', " "),
-                    item.command.replace('|', " ")
-                )
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-        let _ = std::fs::write(path, text);
+        save_registered_items(
+            self.items
+                .iter()
+                .skip(4)
+                .map(|item| (item.name.as_str(), item.command.as_str())),
+        );
     }
 
     pub(crate) fn add_path(&mut self, path: &Path) {
