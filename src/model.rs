@@ -187,7 +187,10 @@ mod tests {
         assert_eq!(groups[0].name, "Visual Studio Code");
         assert_eq!(groups[0].command, r"C:\Apps\Code.exe");
         let titles: Vec<_> = groups[0].windows.iter().map(|w| w.title.as_str()).collect();
-        assert_eq!(titles, ["a.rs - Visual Studio Code", "b.rs - Visual Studio Code"]);
+        assert_eq!(
+            titles,
+            ["a.rs - Visual Studio Code", "b.rs - Visual Studio Code"]
+        );
         assert_eq!(groups[1].name, "Downloads");
     }
 
