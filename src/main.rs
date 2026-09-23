@@ -406,7 +406,7 @@ impl App for LauncherApp {
                     );
                     directional_tooltip(
                         &settings_response,
-                        "ランチャー設定",
+                        "Windows Side Dock 設定",
                         self.popup_direction.alignment(ctx),
                     );
                     if settings_response.clicked() {
@@ -461,7 +461,7 @@ impl App for LauncherApp {
             ctx.show_viewport_immediate(
                 egui::ViewportId::from_hash_of("launcher-settings"),
                 egui::ViewportBuilder::default()
-                    .with_title("ランチャー設定")
+                    .with_title("Windows Side Dock 設定")
                     .with_inner_size([380.0, 430.0])
                     .with_min_inner_size([360.0, 400.0])
                     .with_position(position)
@@ -474,7 +474,7 @@ impl App for LauncherApp {
                         self.show_settings = false;
                     }
                     egui::CentralPanel::default().show(settings_ctx, |ui| {
-                        ui.heading("ランチャー設定");
+                        ui.heading("Windows Side Dock 設定");
                         ui.separator();
                         ui.label("UIフォント");
                         ui.add_enabled(false, egui::Button::new("BIZ UDPゴシック"));
@@ -1551,7 +1551,7 @@ fn choose_process_explorer_file() -> Option<String> {
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::FindWindowW;
 
-    let owner_title: Vec<u16> = std::ffi::OsStr::new("ランチャー設定")
+    let owner_title: Vec<u16> = std::ffi::OsStr::new("Windows Side Dock 設定")
         .encode_wide()
         .chain(Some(0))
         .collect();
@@ -1592,7 +1592,7 @@ fn popup_should_open_left(_ctx: &egui::Context) -> bool {
         FindWindowW, GetSystemMetrics, GetWindowRect,
     };
 
-    let title: Vec<u16> = std::ffi::OsStr::new("ランチャー")
+    let title: Vec<u16> = std::ffi::OsStr::new("Windows Side Dock")
         .encode_wide()
         .chain(Some(0))
         .collect();
@@ -1614,7 +1614,7 @@ fn launcher_window_position() -> Option<egui::Pos2> {
     use windows_sys::Win32::Foundation::RECT;
     use windows_sys::Win32::UI::WindowsAndMessaging::{FindWindowW, GetWindowRect};
 
-    let title: Vec<u16> = std::ffi::OsStr::new("ランチャー")
+    let title: Vec<u16> = std::ffi::OsStr::new("Windows Side Dock")
         .encode_wide()
         .chain(Some(0))
         .collect();
@@ -1657,7 +1657,7 @@ fn settings_dialog_position(ctx: &egui::Context, direction: PopupDirection) -> e
     use windows_sys::Win32::Foundation::RECT;
     use windows_sys::Win32::UI::WindowsAndMessaging::{FindWindowW, GetWindowRect};
 
-    let title: Vec<u16> = std::ffi::OsStr::new("ランチャー")
+    let title: Vec<u16> = std::ffi::OsStr::new("Windows Side Dock")
         .encode_wide()
         .chain(Some(0))
         .collect();
@@ -1776,7 +1776,7 @@ fn tooltip_screen_position(response: &egui::Response, open_left: bool) -> Option
     use windows_sys::Win32::Foundation::RECT;
     use windows_sys::Win32::UI::WindowsAndMessaging::{FindWindowW, GetWindowRect};
 
-    let title: Vec<u16> = std::ffi::OsStr::new("ランチャー")
+    let title: Vec<u16> = std::ffi::OsStr::new("Windows Side Dock")
         .encode_wide()
         .chain(Some(0))
         .collect();
@@ -1881,11 +1881,11 @@ fn main() -> eframe::Result {
             .with_fullscreen(false)
             .with_maximized(false)
             .with_transparent(true)
-            .with_title("ランチャー"),
+            .with_title("Windows Side Dock"),
         ..Default::default()
     };
     eframe::run_native(
-        "ランチャー",
+        "Windows Side Dock",
         options,
         Box::new(|cc| {
             configure_font(&cc.egui_ctx);

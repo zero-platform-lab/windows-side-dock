@@ -1,4 +1,4 @@
-# Quick Launch
+# Windows Side Dock
 
 Rustと`eframe/egui`で作ったWindows向けのDock型アプリランチャーです。
 
@@ -25,4 +25,4 @@ cargo run
 cargo build --release
 ```
 
-実行ファイルは`target\release\lancher.exe`に作成されます。
+実行ファイルは`target\release\windows-side-dock.exe`に作成されます。
