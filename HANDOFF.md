@@ -94,7 +94,16 @@ MSI（`installer\Package.wxs`）が登録・解除する項目は次の2つ。
 
 Dock本体（`src/shell_menu.rs`）が起動時と設定変更時に `02ProcessTool` の `MUIVerb` と `command` を書き換え、Dock設定のTask Manager／Process Explorerに合わせる。Process Explorerのパスが空ならタスク マネージャーに戻す。キーが存在しない（MSI未インストール）場合は何もしないため、開発ビルドを直接起動してもメニューは作られない。値の名前はMSIと同じなので、アンインストール時はMSIがまとめて削除する。
 
-Windows 11では「その他のオプションを確認」側に表示される場合がある。
+上の従来メニューは、Windows 11では「その他のオプションを確認」の中に出る。
+
+Windows 11 の新しい（短縮版の）右クリックメニューにも、0.1.27から「Windows Side Dock ＞（場所を開く／プロセスツール）」を出している（デスクトップで実機確認済み）。
+
+- `shell-menu/`: シェル拡張のクレート（DLL `windows_side_dock_shell.dll`）。`IExplorerCommand` を実装し、項目の名前とコマンドは上の従来メニューのレジストリ（`02ProcessTool`）から読むので、Dockの設定変更がそのまま反映される。COM部分（`com.rs`）はエクスプローラーに読み込まれないと動かないため自動テストの対象外。純粋な処理は `command_line.rs` に置いてテストする。`examples/probe.rs` でDLLを読み込んで項目を表示できる（`cargo run -p windows-side-dock-shell --example probe -- <DLLのパス>`）
+- `installer/sparse/AppxManifest.xml`: DLLをエクスプローラーに登録するスパースパッケージ（MSIX）。中身はマニフェストとロゴだけで、DLLとexeはMSIのインストール先（外部の場所）に置く。`scripts/build-sparse-package.ps1` が作る
+- MSIXのPublisherは、Windowsが証明書から読むサブジェクト `O=Zero Platform Lab, CN=Zero Platform Lab` と並び順まで一致させる必要がある（違うと署名が0x8007000Bで失敗する）
+- MSIがインストール時に `Add-AppxPackage -ExternalLocation` で登録し、アンインストール時に外す（WixQuietExec、失敗してもインストールは続ける）。署名を信頼していないPCでは登録に失敗し、従来メニューだけになる
+- 登録には署名済みのMSIXが要る。手元の `build-installer.ps1` のMSIXは未署名なので、手元で作ったMSIでは新しいメニューは登録されない。試すときは GitHub Actions を手動実行して（`gh workflow run release.yml`）、成果物 `msi-signed` を入れる
+- CLSIDは `23E04CB3-838F-4762-B46F-9AEFAA12EB5B`（`com.rs` とマニフェストの両方にある）
 
 0.1.4で旧 `02TaskManager` を廃止し、手動登録だった `02ProcessTool` をMSI管理下へ移した（メニュー3項目の重複を解消、実機確認済み）。
 
@@ -117,6 +126,7 @@ Windows 11では「その他のオプションを確認」側に表示される�
 - 計測: `.\scripts\coverage.ps1`（HTMLで見る場合は `-Html`）。nightly、llvm-tools、`cargo-llvm-cov 0.9.1` が必要で、いずれもインストール済み
 - 現在: 自動テスト112件。分岐 266/266、行・リージョン・関数とも100%
 - スクリプトは毎回 `cargo llvm-cov clean` してから測る。古いテスト実行ファイルが残ると、行番号のずれた誤った結果になるため
+- シェル拡張（`shell-menu/`）はカバレッジ計測の対象外（`coverage.ps1` は本体のクレートだけを測る）。テストは `cargo test --workspace` で動く
 - 計測対象外（`coverage(off)`）: `win32.rs`・`win32_tray.rs`・`win32_events.rs`・`win32_appbar.rs`（OSを実際に操作する層）と `main()`（eframe起動）だけ。ここへ判断ロジックを置かないこと
 
 テストの仕組み:
@@ -152,7 +162,7 @@ Windows 11では「その他のオプションを確認」側に表示される�
 
 優先度が高い未完了事項:
 
-1. Windows 11の新しい（短縮版の）右クリックメニューへの登録。IExplorerCommandを実装したシェル拡張DLLと、パッケージIDを付けるスパースMSIXパッケージが必要。MSIXの署名は、署名付きリリースの仕組み（下記）で賄える見込み（`sign-windows.yml` はMSIXに対応。証明書をこのPCの信頼ストアへ登録する必要がある）。DLLとMSIXの作成は未着手。
+なし（2026-09-23時点）。新しい右クリックメニューはフォルダーの中の背景では自動操作で確かめられていない（デスクトップでは確認済み）。
 
 GitHub Releasesを使った自動更新はユーザー判断により対象外（2026-09-23）。更新は新しいMSIを手動で実行する方式とする。
 
