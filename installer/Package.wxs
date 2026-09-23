@@ -64,5 +64,16 @@
       <ComponentRef Id="DesktopBackgroundMenu" />
       <ComponentRef Id="DirectoryBackgroundMenu" />
     </Feature>
+
+    <CustomAction
+      Id="LaunchApplication"
+      FileRef="WindowsSideDockExe"
+      ExeCommand=""
+      Execute="immediate"
+      Return="asyncNoWait"
+      Impersonate="yes" />
+    <InstallExecuteSequence>
+      <Custom Action="LaunchApplication" After="InstallFinalize" Condition="NOT REMOVE~=&quot;ALL&quot;" />
+    </InstallExecuteSequence>
   </Package>
 </Wix>
