@@ -1729,19 +1729,37 @@ fn settings_dialog_position(_ctx: &egui::Context, _direction: PopupDirection) ->
 }
 
 fn directional_tooltip(response: &egui::Response, text: &str, alignment: egui::RectAlign) {
+    let state_id = response.id.with("child-tooltip-state");
     if response
         .ctx
         .input(|input| input.pointer.any_down() || input.pointer.any_click())
     {
+        response
+            .ctx
+            .data_mut(|data| data.remove::<(Instant, egui::Pos2)>(state_id));
         return;
     }
     if !egui::Tooltip::should_show_tooltip(response, false) {
+        response
+            .ctx
+            .data_mut(|data| data.remove::<(Instant, egui::Pos2)>(state_id));
         return;
     }
-    let Some(position) = tooltip_screen_position(response, alignment == egui::RectAlign::LEFT)
+    let Some(initial_position) =
+        tooltip_screen_position(response, alignment == egui::RectAlign::LEFT)
     else {
         return;
     };
+    let (opened_at, position) = response.ctx.data_mut(|data| {
+        if let Some(state) = data.get_temp::<(Instant, egui::Pos2)>(state_id) {
+            state
+        } else {
+            let state = (Instant::now(), initial_position);
+            data.insert_temp(state_id, state);
+            state
+        }
+    });
+    let ready = opened_at.elapsed() >= Duration::from_millis(20);
     let tooltip_text = text.to_owned();
     response.ctx.show_viewport_immediate(
         egui::ViewportId::from_hash_of(("launcher-tooltip", response.id)),
@@ -1754,8 +1772,12 @@ fn directional_tooltip(response: &egui::Response, text: &str, alignment: egui::R
             .with_transparent(true)
             .with_taskbar(false)
             .with_mouse_passthrough(true)
+            .with_visible(ready)
             .with_always_on_top(),
         |tooltip_ctx, _class| {
+            if !ready {
+                tooltip_ctx.request_repaint_after(Duration::from_millis(20));
+            }
             egui::CentralPanel::default()
                 .frame(
                     egui::Frame::new()
