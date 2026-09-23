@@ -201,7 +201,8 @@ fn pinned_menu_launches_idle_items() {
     harness.run();
     assert!(harness.query_by_label("ウィンドウへ移動").is_none());
     assert!(harness.query_by_label("ファイルエクスプローラー").is_some());
-    assert!(harness.query_by_label("プロパティ").is_some());
+    assert!(harness.query_by_label("プロパティ").is_none());
+    assert!(harness.query_by_label("管理者として実行").is_none());
     assert!(harness.query_by_label("ピン留めを外す").is_some());
     click(&mut harness, "起動");
     assert_eq!(platform.calls(), [r"open C:\Windows\explorer.exe"]);

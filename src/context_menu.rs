@@ -234,10 +234,13 @@ impl LauncherApp {
     }
 
     /// エクスプローラーの右クリックメニューと同じ操作のボタン。押されたら `true`。
-    /// Windows 設定（`ms-settings:`）のようにファイルでないものには出さない。
+    /// Windows 設定（`ms-settings:`）とエクスプローラーには出さない。設定はファイルでなく、
+    /// エクスプローラーは管理者として起動しても通常の権限で開き直し、場所やプロパティも
+    /// Windowsフォルダーの explorer.exe を指すだけで役に立たない（2026-09-23 ユーザー判断）。
     fn file_action_buttons(&mut self, ui: &mut egui::Ui, command: &str) -> bool {
         let path = normalized_executable_path(command);
-        if !std::path::Path::new(&path).is_absolute() {
+        let explorer = path.to_ascii_lowercase().ends_with(r"\explorer.exe");
+        if explorer || !std::path::Path::new(&path).is_absolute() {
             return false;
         }
         for (label, action) in [
