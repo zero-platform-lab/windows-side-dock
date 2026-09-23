@@ -1713,7 +1713,7 @@ fn settings_dialog_position(ctx: &egui::Context, direction: PopupDirection) -> e
             PopupDirection::Right => false,
         };
         let x = if open_left {
-            rect.left as f32 - 332.0
+            rect.left as f32 - 392.0
         } else {
             rect.right as f32 + 12.0
         };
