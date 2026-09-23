@@ -31,7 +31,7 @@ MSI生成:
 
 ## 現在の主な機能
 
-- 画面右上を初期位置とする、移動・縦サイズ変更可能な枠なしDock
+- 画面右上を初期位置とし、作業領域の高さいっぱいに開く、移動・縦サイズ変更可能な枠なしDock
 - 日付、曜日、時刻表示
 - BIZ UDPゴシックの利用
 - ブラックメタリック背景とシルバーのDock設定アイコン
@@ -148,7 +148,7 @@ GitHub Releasesを使った自動更新はユーザー判断により対象外�
 - インストール先: `%LOCALAPPDATA%\Programs\Windows Side Dock`
 - Package ID: `ZeroPlatformLab.WindowsSideDock`（変更しないこと）
 - バージョン元: `Cargo.toml`
-- 現在のバージョン: `0.1.9`
+- 現在のバージョン: `0.1.10`
 - `build-installer.ps1` はUTF-8のため、Windows PowerShell 5.1ではなくPowerShell 7（`pwsh`）で実行すること
 - `MajorUpgrade`で旧版を置換し、ダウングレードを拒否
 - 同一バージョンの開発用再インストールを許可

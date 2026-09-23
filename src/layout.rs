@@ -8,7 +8,8 @@ pub(crate) const TOOLTIP_WIDTH: f32 = 220.0;
 pub(crate) const CONTEXT_MENU_WIDTH: f32 = 210.0;
 pub(crate) const WINDOW_PICKER_WIDTH: f32 = 480.0;
 const DOCK_WIDTH: f32 = 54.0;
-const DOCK_MAX_HEIGHT: f32 = 800.0;
+/// 作業領域が分からないときの高さ。
+const DOCK_FALLBACK_HEIGHT: f32 = 800.0;
 const DOCK_MARGIN: f32 = 12.0;
 
 /// 基準範囲の左右どちらかへ、幅 `width` のポップアップを `gap` だけ離して置くときの左端X座標。
@@ -168,12 +169,12 @@ pub(crate) fn format_date_time(time: LocalTime) -> (String, String, String) {
     )
 }
 
-/// 起動時のDockの位置とサイズ。作業領域の右上に置き、高さは作業領域に収める。
+/// 起動時のDockの位置とサイズ。作業領域の右上に置き、高さは上下の余白を除いた作業領域いっぱいにする。
 pub(crate) fn dock_geometry(work_area: Option<egui::Rect>) -> ([f32; 2], [f32; 2]) {
     let Some(area) = work_area else {
-        return ([0.0, 60.0], [DOCK_WIDTH, DOCK_MAX_HEIGHT]);
+        return ([0.0, 60.0], [DOCK_WIDTH, DOCK_FALLBACK_HEIGHT]);
     };
-    let height = DOCK_MAX_HEIGHT.min(area.height() - DOCK_MARGIN * 2.0);
+    let height = area.height() - DOCK_MARGIN * 2.0;
     (
         [
             area.right() - DOCK_WIDTH - DOCK_MARGIN,
@@ -334,11 +335,11 @@ mod tests {
     }
 
     #[test]
-    fn fits_dock_into_the_work_area() {
+    fn fills_the_work_area_height() {
         let full_hd = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1920.0, 1032.0));
         assert_eq!(
             dock_geometry(Some(full_hd)),
-            ([1854.0, 12.0], [54.0, 800.0])
+            ([1854.0, 12.0], [54.0, 1008.0])
         );
         let short = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1280.0, 600.0));
         assert_eq!(dock_geometry(Some(short)), ([1214.0, 12.0], [54.0, 576.0]));
@@ -349,7 +350,7 @@ mod tests {
         };
         assert_eq!(
             dock_geometry(platform.work_area()),
-            ([1854.0, 12.0], [54.0, 800.0])
+            ([1854.0, 12.0], [54.0, 1008.0])
         );
     }
 }
