@@ -99,37 +99,43 @@ Windows 11では「その他のオプションを確認」側に表示される�
 
 ## テストとカバレッジ
 
-- 現在の自動テスト: 29件（`model.rs`、`config.rs`、`layout.rs`、`ui.rs`、`shell_menu.rs`）
-- 全体行カバレッジ: 22.67%（`cargo llvm-cov --summary-only`）
-- `model.rs` 行カバレッジ: 100%
-- `config.rs` 行カバレッジ: 66.67%
-- `layout.rs` 行カバレッジ: 11.43%
-- `cargo-llvm-cov 0.9.1` はインストール済み
+ユーザー指示により、技術的にテストできない部分を除いてC1（分岐）カバレッジ100%を維持する（2026-09-23）。
 
-テスト済み: アプリ同一判定、ウィンドウのグループ化（`model::group_windows`）、タイトル正規化、設定値と `items.txt` の読み書き、保存先パス、ポップアップ位置計算（`layout::beside_x`）、実行ファイルパス正規化。
+- 計測: `.\scripts\coverage.ps1`（HTMLで見る場合は `-Html`）。nightly、llvm-tools、`cargo-llvm-cov 0.9.1` が必要で、いずれもインストール済み
+- 現在: 自動テスト110件。分岐 258/258、行・リージョン・関数とも100%
+- スクリプトは毎回 `cargo llvm-cov clean` してから測る。古いテスト実行ファイルが残ると、行番号のずれた誤った結果になるため
+- 計測対象外（`coverage(off)`）: `win32.rs`（OSを実際に操作する層）と `main()`（eframe起動）だけ。ここへ判断ロジックを置かないこと
 
-テスト方針: Win32 APIやファイルI/Oを呼ぶ関数から純粋関数を切り出し、そちらをテストする。ポップアップ幅は `layout.rs` の `*_WIDTH` 定数を唯一の値とし、表示サイズと位置計算の両方で使うこと（以前、ウィンドウ選択画面の幅だけ変更され、左表示時にDockへ120px重なる不具合があった）。
+テストの仕組み:
 
-追加でテスト済み: 実行中アプリのピン留め項目への割り当て（`model::assign_running`）、保存対象のユーザー登録項目（`model::registered_entries`、先頭 `BUILTIN_ITEM_COUNT` 件は標準アイコン）、ドロップしたファイルの表示名、旧保存先からの移行。
+- OSへの問い合わせと操作はすべて `platform::Platform` トレイト経由。本番は `win32::WindowsPlatform`、テストは `platform_fake.rs` の `FakePlatform`（操作を `calls()` に記録）
+- 設定ファイルは `config::ConfigStore` 経由。テストは `config::temp_root` の一時フォルダーを使う
+- 画面は `egui_kittest` でテストする。部品はアクセシビリティ名（`get_by_label`）で探すので、文字のないクリック部品には `widget_info` で名前を付けること（`dock::label_widget`、`ui::icon_slot`、`theme::left_aligned_button`）
+- テスト環境では子Viewportが本体に埋め込まれて描かれる。メニューを開いた直後やホバー中は再描画要求が続くため、`harness.run()` ではなく `harness.step()` を使う
+- キー入力やドラッグはイベントごとに1フレームずつ処理される。ウィンドウ操作（`ViewportCommand`）はそのフレームの出力で確認する（`dock_tests.rs` の `press`、`drag`）
+
+ポップアップ幅は `layout.rs` の `*_WIDTH` 定数を唯一の値とし、表示サイズと位置計算の両方で使うこと（以前、ウィンドウ選択画面の幅だけ変更され、左表示時にDockへ120px重なる不具合があった）。
 
 ## 技術的負債と次の作業
 
-`src/main.rs` は41行で、起動処理だけを持つ。全Rustソースを400行未満へ分割済み。
+本体のRustソースは400行未満に保っている（テスト専用ファイルは除く）。
 
-- `model.rs`: `LauncherItem`、`RunningWindow`、各enum
-- `config.rs`: 設定と登録項目の永続化
-- `platform.rs`: Win32 API、Shell起動、ウィンドウ列挙、アイコン取得
+- `model.rs`: `LauncherItem`、`RunningWindow`、ウィンドウのグループ化、実行中アプリの割り当て
+- `config.rs`: `ConfigStore`（設定と登録項目の永続化、旧保存先からの移行）
+- `platform.rs`: `Platform` トレイトと、それを使うウィンドウ操作の判断
+- `win32.rs`: `Platform` のWin32実装（計測対象外）
 - `app.rs`: アプリ状態と操作
 - `dock.rs`: Dock本体と設定画面
 - `context_menu.rs`: 右クリックメニューとウィンドウ選択
-- `layout.rs`: 子Viewportの位置・サイズ計算
+- `layout.rs`: 子Viewportの位置・サイズ計算、時計の表示、ツールチップ
 - `shell_menu.rs`: Windows背景メニューのプロセスツール項目の同期
-- `ui.rs`: アイコン操作と項目生成
+- `ui.rs`: アイコンボタン
 - `theme.rs`: フォント、色、独自アイコン描画
+- `*_tests.rs`、`platform_fake.rs`: テスト専用
 
 優先度が高い未完了事項:
 
-なし（2026-09-23時点）。`dock.rs`、`context_menu.rs`、`platform.rs` はUIとWin32 APIが中心で、自動テストの対象外。
+なし（2026-09-23時点）。
 
 GitHub Releasesを使った自動更新はユーザー判断により対象外（2026-09-23）。更新は新しいMSIを手動で実行する方式とする。
 
@@ -141,7 +147,7 @@ GitHub Releasesを使った自動更新はユーザー判断により対象外�
 - インストール先: `%LOCALAPPDATA%\Programs\Windows Side Dock`
 - Package ID: `ZeroPlatformLab.WindowsSideDock`（変更しないこと）
 - バージョン元: `Cargo.toml`
-- 現在のバージョン: `0.1.6`
+- 現在のバージョン: `0.1.7`
 - `build-installer.ps1` はUTF-8のため、Windows PowerShell 5.1ではなくPowerShell 7（`pwsh`）で実行すること
 - `MajorUpgrade`で旧版を置換し、ダウングレードを拒否
 - 同一バージョンの開発用再インストールを許可
@@ -155,6 +161,6 @@ GitHub Releasesを使った自動更新はユーザー判断により対象外�
 ## Gitと作業ツリー
 
 - 変更は小さく分けてコミットする方針
-- 直近の機能コミット: 設定保存先の移行（0.1.6）
+- 直近の機能コミット: テスト用のOS抽象化とC1カバレッジ100%（0.1.7）
 - `windows-side-dock-screenshot.png` はユーザー指示によりGitへ追加しない
 - 既存のユーザー変更を破棄する `git reset --hard` 等は使用しない
