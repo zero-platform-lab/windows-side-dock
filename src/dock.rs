@@ -345,23 +345,25 @@ impl LauncherApp {
 }
 
 /// 上下の端が暗く、中央がわずかに明るいブラックメタリックの背景。
+/// 帯を重ねると境目が線になって見えるため、頂点色を持つ1枚のメッシュで滑らかに描く。
 fn paint_metallic_background(ui: &egui::Ui, area: egui::Rect) {
-    const BANDS: usize = 28;
-    for band in 0..BANDS {
-        let t = band as f32 / (BANDS - 1) as f32;
-        let shine = (1.0 - (t * 2.0 - 1.0).abs()) * 12.0;
-        let value = (9.0 + shine) as u8;
-        let top = egui::lerp(area.top()..=area.bottom(), t);
-        let bottom = egui::lerp(area.top()..=area.bottom(), (band + 1) as f32 / BANDS as f32);
-        ui.painter().rect_filled(
-            egui::Rect::from_min_max(
-                egui::pos2(area.left(), top),
-                egui::pos2(area.right(), bottom),
-            ),
-            0.0,
-            Color32::from_rgb(value, value + 1, value + 4),
-        );
+    let edge = Color32::from_rgb(9, 10, 13);
+    let middle = Color32::from_rgb(21, 22, 25);
+    let mut mesh = egui::Mesh::default();
+    for (y, color) in [
+        (area.top(), edge),
+        (area.center().y, middle),
+        (area.bottom(), edge),
+    ] {
+        mesh.colored_vertex(egui::pos2(area.left(), y), color);
+        mesh.colored_vertex(egui::pos2(area.right(), y), color);
     }
+    // 上半分と下半分を、それぞれ2つの三角形で埋める。
+    for top in [0, 2] {
+        mesh.add_triangle(top, top + 1, top + 2);
+        mesh.add_triangle(top + 1, top + 3, top + 2);
+    }
+    ui.painter().add(mesh);
 }
 
 #[cfg(test)]
