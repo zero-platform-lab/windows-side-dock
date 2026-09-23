@@ -53,7 +53,7 @@ MSI生成:
 - アプリアイコン: 起動、ウィンドウタイトル選択、ピン留め／解除、すべて閉じる
 - 時計: 設定で選択したTask ManagerまたはProcess Explorer
 - Dockの空白背景: Windows Side Dockの場所、プロセスツール、Dock設定
-- 移動ハンドル: Dock設定
+- 移動ハンドル、設定の歯車: Dockの空白背景と同じメニュー
 
 右クリックメニューとツールチップは、親Viewport内へ制限されないよう子Viewportで実装している。この方針は過去のユーザー判断によるものなので、egui標準Popupへ安易に戻さないこと。
 
@@ -148,7 +148,7 @@ GitHub Releasesを使った自動更新はユーザー判断により対象外�
 - インストール先: `%LOCALAPPDATA%\Programs\Windows Side Dock`
 - Package ID: `ZeroPlatformLab.WindowsSideDock`（変更しないこと）
 - バージョン元: `Cargo.toml`
-- 現在のバージョン: `0.1.10`
+- 現在のバージョン: `0.1.11`
 - `build-installer.ps1` はUTF-8のため、Windows PowerShell 5.1ではなくPowerShell 7（`pwsh`）で実行すること
 - `MajorUpgrade`で旧版を置換し、ダウングレードを拒否
 - 同一バージョンの開発用再インストールを許可

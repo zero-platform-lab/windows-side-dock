@@ -228,6 +228,9 @@ impl LauncherApp {
             self.show_settings = true;
             ui.ctx().request_repaint();
         }
+        if response.secondary_clicked() {
+            self.open_context_menu(ContextMenuTarget::Handle);
+        }
     }
 
     fn show_settings_viewport(&mut self, ctx: &egui::Context) {

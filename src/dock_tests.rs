@@ -520,3 +520,15 @@ fn runs_as_an_eframe_app() {
     harness.step();
     assert!(harness.query_by_label("時計").is_some());
 }
+
+#[test]
+fn opens_dock_menu_from_gear_button() {
+    let (mut harness, _platform) = dock("dock-gear-menu");
+    harness.get_by_label("Dock 設定").click_secondary();
+    harness.step();
+    assert_eq!(
+        harness.state().context_menu.map(|menu| menu.0),
+        Some(ContextMenuTarget::Handle)
+    );
+    assert!(!harness.state().show_settings);
+}
