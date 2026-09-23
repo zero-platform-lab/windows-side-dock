@@ -21,7 +21,7 @@ const MENU_CHROME: egui::Vec2 = egui::vec2(8.0 * 2.0 + 2.0, 7.0 * 2.0 + 2.0);
 /// `window_count` は対象アプリのウィンドウ数（対象が消えていれば `None`）。
 fn menu_size(target: ContextMenuTarget, window_count: Option<usize>) -> (f32, f32) {
     let (single, multiple_base) = match target {
-        ContextMenuTarget::Handle => return (CONTEXT_MENU_WIDTH, 132.0),
+        ContextMenuTarget::Handle => return (CONTEXT_MENU_WIDTH, 156.0),
         ContextMenuTarget::Clock => return (CONTEXT_MENU_WIDTH, 54.0),
         ContextMenuTarget::Pinned(_) => (150.0, 146.0),
         ContextMenuTarget::Running(_) => (116.0, 112.0),
@@ -136,6 +136,15 @@ impl LauncherApp {
     ) -> bool {
         match target {
             ContextMenuTarget::Handle => {
+                let label = if self.collapsed {
+                    "Dockを引き出す"
+                } else {
+                    "Dockをしまう"
+                };
+                if ui.button(label).clicked() {
+                    self.set_collapsed(!self.collapsed);
+                    return true;
+                }
                 if ui.button("Windows Side Dockの場所を開く").clicked() {
                     if let Some(directory) = self.platform.install_directory() {
                         let _ = self.platform.open_target(&directory.to_string_lossy());

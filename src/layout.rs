@@ -7,10 +7,10 @@ pub(crate) const SETTINGS_WIDTH: f32 = 380.0;
 pub(crate) const TOOLTIP_WIDTH: f32 = 220.0;
 pub(crate) const CONTEXT_MENU_WIDTH: f32 = 210.0;
 pub(crate) const WINDOW_PICKER_WIDTH: f32 = 480.0;
-const DOCK_WIDTH: f32 = 54.0;
+pub(crate) const DOCK_WIDTH: f32 = 54.0;
 /// 作業領域が分からないときの高さ。
 const DOCK_FALLBACK_HEIGHT: f32 = 800.0;
-const DOCK_MARGIN: f32 = 12.0;
+pub(crate) const DOCK_MARGIN: f32 = 12.0;
 
 /// 基準範囲の左右どちらかへ、幅 `width` のポップアップを `gap` だけ離して置くときの左端X座標。
 fn beside_x(anchor_left: f32, anchor_right: f32, open_left: bool, width: f32, gap: f32) -> f32 {

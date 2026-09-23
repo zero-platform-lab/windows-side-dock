@@ -13,9 +13,11 @@ pub(crate) struct LocalTime {
     pub(crate) second: u16,
 }
 
-/// タスクトレイのメニューから届く操作。Dockの表示切り替えはOS側で直接行うため含まない。
+/// タスクトレイのメニューとアイコンのクリックから届く操作。
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum TrayAction {
+    /// Dockをしまう・引き出す。
+    ToggleCollapsed,
     OpenSettings,
     LaunchProcessTool,
     Quit,
@@ -52,6 +54,9 @@ pub(crate) trait Platform {
     /// ほかのアプリのウィンドウの変化を見張れていれば、前回の呼び出しから変化があったか。
     /// 見張れていなければ `None` で、呼び出し側が定期的に確認する。
     fn take_window_changes(&self) -> Option<bool>;
+    /// Dockのウィンドウがあるモニターの右端を `width` 物理ピクセルだけ確保し、Dockを置ける範囲を返す。
+    /// `None` を渡すと確保をやめる。確保できなければ `None` を返す。
+    fn reserve_right_edge(&self, width: Option<f32>) -> Option<egui::Rect>;
 }
 
 /// 実行ファイルのパスごとに取り出したアイコン。取り出せなかったことも覚えておく。
@@ -158,6 +163,9 @@ impl Platform for NullPlatform {
         None
     }
     fn take_window_changes(&self) -> Option<bool> {
+        None
+    }
+    fn reserve_right_edge(&self, _width: Option<f32>) -> Option<egui::Rect> {
         None
     }
 }

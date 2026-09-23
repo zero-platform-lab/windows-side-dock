@@ -16,38 +16,28 @@ const SETTINGS_ID: &str = "settings";
 const PROCESS_TOOL_ID: &str = "process-tool";
 const QUIT_ID: &str = "quit";
 
-/// Dock本体のウィンドウ。非表示中はeguiの描画が止まるため、表示の切り替えはここで直接行う。
+/// Dock本体のウィンドウ。非表示中はeguiの描画が止まるため、操作を積む前にここで表示しておく。
 fn dock_window() -> windows_sys::Win32::Foundation::HWND {
     use windows_sys::Win32::UI::WindowsAndMessaging::FindWindowW;
     let title: Vec<u16> = "Windows Side Dock".encode_utf16().chain(Some(0)).collect();
     unsafe { FindWindowW(std::ptr::null(), title.as_ptr()) }
 }
 
-fn show_dock(visible: bool) {
-    use windows_sys::Win32::UI::WindowsAndMessaging::{
-        SetForegroundWindow, ShowWindow, SW_HIDE, SW_SHOW,
-    };
+fn show_dock() {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{SetForegroundWindow, ShowWindow, SW_SHOW};
     let window = dock_window();
     if window.is_null() {
         return;
     }
     unsafe {
-        ShowWindow(window, if visible { SW_SHOW } else { SW_HIDE });
-        if visible {
-            SetForegroundWindow(window);
-        }
+        ShowWindow(window, SW_SHOW);
+        SetForegroundWindow(window);
     }
-}
-
-fn toggle_dock() {
-    use windows_sys::Win32::UI::WindowsAndMessaging::IsWindowVisible;
-    let window = dock_window();
-    show_dock(window.is_null() || unsafe { IsWindowVisible(window) } == 0);
 }
 
 /// Dockを表示してから操作を積み、アプリに処理させる。
 fn request(queue: &TrayQueue, ctx: &egui::Context, action: TrayAction) {
-    show_dock(true);
+    show_dock();
     if let Ok(mut queue) = queue.lock() {
         queue.push_back(action);
     }
@@ -64,7 +54,7 @@ fn tray_icon_image() -> Option<Icon> {
 pub(crate) fn install_tray(ctx: egui::Context, queue: TrayQueue) -> Option<TrayIcon> {
     let menu = Menu::new();
     let items = [
-        MenuItem::with_id(TOGGLE_ID, "Dockを表示／隠す", true, None),
+        MenuItem::with_id(TOGGLE_ID, "Dockをしまう／引き出す", true, None),
         MenuItem::with_id(SETTINGS_ID, "Dock 設定", true, None),
         MenuItem::with_id(PROCESS_TOOL_ID, "システムモニター", true, None),
     ];
@@ -75,8 +65,9 @@ pub(crate) fn install_tray(ctx: egui::Context, queue: TrayQueue) -> Option<TrayI
 
     let menu_queue = queue.clone();
     let menu_ctx = ctx.clone();
+    let (click_queue, click_ctx) = (queue, ctx);
     MenuEvent::set_event_handler(Some(move |event: MenuEvent| match event.id().as_ref() {
-        TOGGLE_ID => toggle_dock(),
+        TOGGLE_ID => request(&menu_queue, &menu_ctx, TrayAction::ToggleCollapsed),
         SETTINGS_ID => request(&menu_queue, &menu_ctx, TrayAction::OpenSettings),
         PROCESS_TOOL_ID => request(&menu_queue, &menu_ctx, TrayAction::LaunchProcessTool),
         QUIT_ID => request(&menu_queue, &menu_ctx, TrayAction::Quit),
@@ -89,7 +80,7 @@ pub(crate) fn install_tray(ctx: egui::Context, queue: TrayQueue) -> Option<TrayI
             ..
         } = event
         {
-            toggle_dock();
+            request(&click_queue, &click_ctx, TrayAction::ToggleCollapsed);
         }
     }));
 

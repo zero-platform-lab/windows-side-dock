@@ -39,6 +39,10 @@ pub(crate) struct LauncherApp {
     pub(crate) always_on_top: bool,
     /// Dockのウィンドウへ最後に反映した「常に手前」の状態。まだなら `None`。
     pub(crate) applied_always_on_top: Option<bool>,
+    /// Dockを画面の端へしまっているか。
+    pub(crate) collapsed: bool,
+    /// 画面の端の確保とDockの大きさへ最後に反映した `collapsed`。まだなら `None`。
+    pub(crate) applied_collapsed: Option<bool>,
     pub(crate) context_menu: Option<(ContextMenuTarget, egui::Pos2, Instant)>,
     /// 開いている右クリックメニューの中身の大きさ。開いた直後の非表示フレームで測る。
     pub(crate) context_menu_size: Option<egui::Vec2>,
@@ -104,6 +108,8 @@ impl LauncherApp {
             popup_direction: config.load_popup_direction(),
             always_on_top: config.load_always_on_top(),
             applied_always_on_top: None,
+            collapsed: false,
+            applied_collapsed: None,
             context_menu: None,
             context_menu_size: None,
             window_picker: None,
@@ -271,7 +277,11 @@ impl LauncherApp {
     pub(crate) fn handle_tray_actions(&mut self, ctx: &egui::Context) {
         while let Some(action) = self.platform.take_tray_action() {
             match action {
-                TrayAction::OpenSettings => self.show_settings = true,
+                TrayAction::ToggleCollapsed => self.set_collapsed(!self.collapsed),
+                TrayAction::OpenSettings => {
+                    self.set_collapsed(false);
+                    self.show_settings = true;
+                }
                 TrayAction::LaunchProcessTool => {
                     self.launch_process_tool();
                 }

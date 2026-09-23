@@ -5,6 +5,7 @@ mod app;
 mod config;
 mod context_menu;
 mod dock;
+mod edge;
 mod layout;
 mod model;
 mod platform;
@@ -15,6 +16,9 @@ mod ui;
 #[cfg(windows)]
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod win32;
+#[cfg(windows)]
+#[cfg_attr(coverage_nightly, coverage(off))]
+mod win32_appbar;
 #[cfg(windows)]
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod win32_events;

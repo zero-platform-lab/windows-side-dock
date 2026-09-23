@@ -50,6 +50,7 @@ MSI生成:
 - タスクトレイのアイコン（左クリックでDockの表示／非表示、右クリックでDock 設定・システムモニター・終了）
 - アプリのアイコン（`assets/icon.ico`。`scripts/make-icon.py` で生成し、`build.rs` がexeへ埋め込む。トレイはexeのリソース番号1、ウィンドウは `assets/icon-64.rgba` を使う）
 - 設定「Dockを常に手前に表示」（既定はオフ。`always_on_top.txt` に `on`/`off` で保存し、`apply_window_level` が変化時だけウィンドウへ反映）
+- 画面の右端の確保（AppBar）。最大化したウィンドウはDockの手前で止まる。時計の下の「≫」、Dockの右クリックメニュー、トレイのクリックでDockを細いつまみへしまうと、確保もつまみの幅だけになる。つまみのクリックで引き出す
 - ログオン時の自動起動（MSIが `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` の `WindowsSideDock` を登録・削除）
 
 ## 右クリック操作
@@ -109,7 +110,7 @@ Windows 11では「その他のオプションを確認」側に表示される�
 - 計測: `.\scripts\coverage.ps1`（HTMLで見る場合は `-Html`）。nightly、llvm-tools、`cargo-llvm-cov 0.9.1` が必要で、いずれもインストール済み
 - 現在: 自動テスト112件。分岐 266/266、行・リージョン・関数とも100%
 - スクリプトは毎回 `cargo llvm-cov clean` してから測る。古いテスト実行ファイルが残ると、行番号のずれた誤った結果になるため
-- 計測対象外（`coverage(off)`）: `win32.rs`・`win32_tray.rs`・`win32_events.rs`（OSを実際に操作する層）と `main()`（eframe起動）だけ。ここへ判断ロジックを置かないこと
+- 計測対象外（`coverage(off)`）: `win32.rs`・`win32_tray.rs`・`win32_events.rs`・`win32_appbar.rs`（OSを実際に操作する層）と `main()`（eframe起動）だけ。ここへ判断ロジックを置かないこと
 
 テストの仕組み:
 
@@ -130,7 +131,9 @@ Windows 11では「その他のオプションを確認」側に表示される�
 - `platform.rs`: `Platform` トレイトと、それを使うウィンドウ操作の判断
 - `win32.rs`: `Platform` のWin32実装（計測対象外）
 - `win32_events.rs`: ほかのアプリのウィンドウの変化（表示・非表示・破棄・前面・最小化・クローク・タイトル）を `SetWinEventHook` で受け、描画を起こす（計測対象外）。タイトルの変化は1秒にまとめる。見張れているときDockは変化があったときと時計の分の変わり目にしか描き直さない。登録に失敗したら1秒ごとの確認に戻る（`Platform::take_window_changes` が `None`）
-- `win32_tray.rs`: タスクトレイのアイコンとメニュー（計測対象外）。メニュー操作は `TrayAction` として待ち行列に積み、`LauncherApp::handle_tray_actions` が処理する。Dockの表示／非表示だけはeguiが非表示中に描画を止めるため、ここで直接切り替える
+- `edge.rs`: 画面の右端の確保範囲とDockの位置の計算、しまう・引き出す操作とつまみの描画
+- `win32_appbar.rs`: AppBarの登録・確保・解除（計測対象外）。強制終了してもWindowsが確保を解除する（確認済み）。通常終了は `App::on_exit` で解除
+- `win32_tray.rs`: タスクトレイのアイコンとメニュー（計測対象外）。メニュー操作は `TrayAction` として待ち行列に積み、`LauncherApp::handle_tray_actions` が処理する。操作を積む前にDockのウィンドウを表示しておく（非表示中はeguiの描画が止まるため）。左クリックはDockをしまう・引き出す
 - `app.rs`: アプリ状態と操作
 - `dock.rs`: Dock本体と設定画面
 - `context_menu.rs`: 右クリックメニューとウィンドウ選択
@@ -143,7 +146,7 @@ Windows 11では「その他のオプションを確認」側に表示される�
 優先度が高い未完了事項:
 
 1. Windows 11の新しい（短縮版の）右クリックメニューへの登録。IExplorerCommandを実装したシェル拡張DLLと、パッケージIDを付けるスパースMSIXパッケージが必要で、MSIXには署名が要る（自己署名＋この PC の TrustedPeople への登録、またはGitHub Actions＋Azure Trusted Signing）。ユーザー判断で後回し（2026-09-23）。
-2. 最大化したウィンドウがDockの下にもぐり込む。AppBar（`SHAppBarMessage`）として作業領域を確保すれば防げる。未着手（2026-09-23提案済み）。
+2. 画面の端を確保している間も、移動ハンドルのドラッグとサイズ変更のつまみでDockを確保範囲の外へ動かせてしまう。しまう・引き出すと元の位置に戻る。
 
 GitHub Releasesを使った自動更新はユーザー判断により対象外（2026-09-23）。更新は新しいMSIを手動で実行する方式とする。
 
@@ -155,7 +158,7 @@ GitHub Releasesを使った自動更新はユーザー判断により対象外�
 - インストール先: `%LOCALAPPDATA%\Programs\Windows Side Dock`
 - Package ID: `ZeroPlatformLab.WindowsSideDock`（変更しないこと）
 - バージョン元: `Cargo.toml`
-- 現在のバージョン: `0.1.16`
+- 現在のバージョン: `0.1.17`
 - `build-installer.ps1` はUTF-8のため、Windows PowerShell 5.1ではなくPowerShell 7（`pwsh`）で実行すること
 - `MajorUpgrade`で旧版を置換し、ダウングレードを拒否
 - 同一バージョンの開発用再インストールを許可

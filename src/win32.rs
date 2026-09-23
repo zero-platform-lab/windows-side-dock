@@ -18,6 +18,12 @@ fn wide(value: &str) -> Vec<u16> {
     OsStr::new(value).encode_wide().chain(Some(0)).collect()
 }
 
+/// Dock本体のウィンドウ。設定画面など子ウィンドウとはタイトルで見分ける。
+fn dock_window() -> HWND {
+    let title = wide("Windows Side Dock");
+    unsafe { FindWindowW(std::ptr::null(), title.as_ptr()) }
+}
+
 fn to_rect(rect: RECT) -> egui::Rect {
     egui::Rect::from_min_max(
         egui::pos2(rect.left as f32, rect.top as f32),
@@ -142,8 +148,7 @@ impl Platform for WindowsPlatform {
     }
 
     fn dock_rect(&self) -> Option<egui::Rect> {
-        let title = wide("Windows Side Dock");
-        let window = unsafe { FindWindowW(std::ptr::null(), title.as_ptr()) };
+        let window = dock_window();
         let mut rect = RECT::default();
         (!window.is_null() && unsafe { GetWindowRect(window, &mut rect) } != 0)
             .then(|| to_rect(rect))
@@ -216,6 +221,17 @@ impl Platform for WindowsPlatform {
 
     fn take_tray_action(&self) -> Option<TrayAction> {
         self.tray_actions.lock().ok()?.pop_front()
+    }
+
+    fn reserve_right_edge(&self, width: Option<f32>) -> Option<egui::Rect> {
+        let window = dock_window();
+        match width {
+            Some(width) => crate::win32_appbar::reserve_right_edge(window, width.round() as i32),
+            None => {
+                crate::win32_appbar::release(window);
+                None
+            }
+        }
     }
 
     fn take_window_changes(&self) -> Option<bool> {

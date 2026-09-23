@@ -26,6 +26,10 @@ pub(crate) struct FakePlatform {
     pub(crate) tray_actions: RefCell<VecDeque<TrayAction>>,
     /// `None` なら見張れない環境。`Some` なら取り出すたびに `Some(false)` へ戻る。
     pub(crate) window_changes: Cell<Option<bool>>,
+    /// 画面の右端を確保できたときに返す範囲。`None` なら確保に失敗する。
+    pub(crate) edge: Option<egui::Rect>,
+    /// `reserve_right_edge` に渡された幅。
+    pub(crate) reservations: RefCell<Vec<Option<f32>>>,
 }
 
 impl Default for FakePlatform {
@@ -58,6 +62,8 @@ impl Default for FakePlatform {
             registry_values: RefCell::default(),
             tray_actions: RefCell::default(),
             window_changes: Cell::new(None),
+            edge: None,
+            reservations: RefCell::default(),
         }
     }
 }
@@ -129,6 +135,10 @@ impl Platform for FakePlatform {
     }
     fn take_tray_action(&self) -> Option<TrayAction> {
         self.tray_actions.borrow_mut().pop_front()
+    }
+    fn reserve_right_edge(&self, width: Option<f32>) -> Option<egui::Rect> {
+        self.reservations.borrow_mut().push(width);
+        self.edge
     }
     fn take_window_changes(&self) -> Option<bool> {
         let changes = self.window_changes.get();

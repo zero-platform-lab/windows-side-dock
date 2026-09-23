@@ -21,6 +21,10 @@ impl App for LauncherApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut Frame) {
         self.show(ctx);
     }
+
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        self.release_edge();
+    }
 }
 
 impl LauncherApp {
@@ -28,6 +32,7 @@ impl LauncherApp {
     pub(crate) fn show(&mut self, ctx: &egui::Context) {
         self.keep_window_state(ctx);
         self.apply_window_level(ctx);
+        self.apply_edge(ctx);
         // ウィンドウの変化を見張れていれば変化があったときだけ、見張れなければ一定間隔で数え直す。
         let changes = self.platform.take_window_changes();
         let due = match changes {
@@ -43,7 +48,11 @@ impl LauncherApp {
         ctx.request_repaint_after(next_repaint(self.platform.local_time(), changes.is_some()));
         self.handle_tray_actions(ctx);
         self.handle_input(ctx);
-        self.show_dock(ctx);
+        if self.collapsed {
+            self.show_collapsed_tab(ctx);
+        } else {
+            self.show_dock(ctx);
+        }
         if self.show_settings {
             self.show_settings_viewport(ctx);
         }
@@ -164,6 +173,7 @@ impl LauncherApp {
         }
         ui.add_space(3.0);
         self.move_handle(ui, ctx);
+        self.collapse_button(ui);
         ui.add_space(3.0);
         self.settings_button(ui);
         ui.add_space(5.0);

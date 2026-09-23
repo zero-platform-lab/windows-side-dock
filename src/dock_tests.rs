@@ -583,6 +583,112 @@ fn opens_dock_menu_from_gear_button() {
     assert!(!harness.state().show_settings);
 }
 
+fn with_edge() -> FakePlatform {
+    FakePlatform {
+        edge: Some(egui::Rect::from_min_max(
+            egui::pos2(1842.0, 0.0),
+            egui::pos2(1920.0, 1032.0),
+        )),
+        ..FakePlatform::default()
+    }
+}
+
+#[test]
+fn reserves_the_right_edge_and_collapses_into_a_tab() {
+    let (app, platform) = app_with(with_edge(), "dock-edge");
+    let mut harness = harness(app);
+    assert_eq!(*platform.reservations.borrow(), [Some(78.0)]);
+    harness.state_mut().applied_collapsed = None;
+    let commands = step_commands(&mut harness);
+    assert!(
+        commands.contains(&egui::ViewportCommand::OuterPosition(egui::pos2(
+            1854.0, 12.0
+        )))
+    );
+    assert!(commands.contains(&egui::ViewportCommand::InnerSize(egui::vec2(54.0, 1008.0))));
+
+    harness.get_by_label("Dockをしまう").click();
+    harness.step();
+    let commands = step_commands(&mut harness);
+    assert!(harness.state().collapsed);
+    assert!(commands.contains(&egui::ViewportCommand::InnerSize(egui::vec2(12.0, 1032.0))));
+    assert_eq!(platform.reservations.borrow().last(), Some(&Some(12.0)));
+    harness.run();
+    assert!(harness.query_by_label("時計").is_none());
+
+    harness.get_by_label("Dockを引き出す").hover();
+    harness.run_steps(3);
+    // ツールチップにも同じ文言が出るため、最初に見つかるつまみを操作する。
+    harness
+        .query_all_by_label("Dockを引き出す")
+        .next()
+        .unwrap()
+        .click_secondary();
+    harness.step();
+    assert!(harness.state().context_menu.is_some());
+    harness.state_mut().context_menu = None;
+    harness.run();
+    harness.get_by_label("Dockを引き出す").click();
+    harness.run();
+    assert!(!harness.state().collapsed);
+    assert!(harness.query_by_label("時計").is_some());
+}
+
+#[test]
+fn collapses_at_the_work_area_edge_when_the_edge_cannot_be_reserved() {
+    let platform = FakePlatform {
+        work_area: Some(egui::Rect::from_min_max(
+            egui::pos2(0.0, 0.0),
+            egui::pos2(1920.0, 1032.0),
+        )),
+        ..FakePlatform::default()
+    };
+    let (app, _platform) = app_with(platform, "dock-edge-fallback");
+    let harness_for = harness;
+    let mut harness = harness_for(app);
+    harness.state_mut().applied_collapsed = None;
+    let commands = step_commands(&mut harness);
+    assert!(
+        commands.contains(&egui::ViewportCommand::OuterPosition(egui::pos2(
+            1854.0, 12.0
+        )))
+    );
+
+    let (app, _platform) = app_with(FakePlatform::default(), "dock-edge-none");
+    let mut without_edge = harness_for(app);
+    without_edge.state_mut().applied_collapsed = None;
+    let commands = step_commands(&mut without_edge);
+    assert!(!commands
+        .iter()
+        .any(|command| matches!(command, egui::ViewportCommand::InnerSize(_))));
+    assert_eq!(without_edge.state().applied_collapsed, Some(false));
+}
+
+#[test]
+fn releases_the_edge_on_exit() {
+    let (mut app, platform) = app_with(with_edge(), "dock-edge-exit");
+    eframe::App::on_exit(&mut app, None);
+    assert_eq!(*platform.reservations.borrow(), [None]);
+}
+
+#[test]
+fn toggles_the_dock_from_the_tray_and_expands_it_for_settings() {
+    use crate::platform::TrayAction;
+    let (app, platform) = app_with(with_edge(), "dock-tray-collapse");
+    platform
+        .tray_actions
+        .replace([TrayAction::ToggleCollapsed].into());
+    let mut harness = harness(app);
+    assert!(harness.state().collapsed);
+    platform
+        .tray_actions
+        .borrow_mut()
+        .push_back(TrayAction::OpenSettings);
+    harness.step();
+    assert!(!harness.state().collapsed);
+    assert!(harness.state().show_settings);
+}
+
 #[test]
 fn handles_tray_menu_actions() {
     use crate::platform::TrayAction;

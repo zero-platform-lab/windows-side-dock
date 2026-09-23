@@ -81,7 +81,7 @@ fn existing_file(test: &str) -> String {
 #[test]
 fn sizes_menus_by_target_and_window_count() {
     use ContextMenuTarget::*;
-    assert_eq!(menu_size(Handle, None), (210.0, 132.0));
+    assert_eq!(menu_size(Handle, None), (210.0, 156.0));
     assert_eq!(menu_size(Clock, None), (210.0, 54.0));
     assert_eq!(menu_size(Pinned(0), Some(0)), (210.0, 102.0));
     assert_eq!(menu_size(Pinned(0), Some(1)), (430.0, 150.0));
@@ -99,6 +99,22 @@ fn widens_menus_toward_the_open_side() {
         egui::pos2(1416.0, 300.0)
     );
     assert_eq!(menu_position(origin, 430.0, false), origin);
+}
+
+#[test]
+fn handle_menu_collapses_and_expands_the_dock() {
+    let (mut harness, _platform) = menu_harness(
+        "menu-collapse",
+        FakePlatform::default(),
+        ContextMenuTarget::Handle,
+    );
+    click(&mut harness, "Dockをしまう");
+    assert!(harness.state().collapsed);
+    assert!(harness.state().context_menu.is_none());
+    open_menu(harness.state_mut(), ContextMenuTarget::Handle);
+    harness.run();
+    click(&mut harness, "Dockを引き出す");
+    assert!(!harness.state().collapsed);
 }
 
 #[test]
