@@ -10,7 +10,6 @@ pub(crate) const WINDOW_PICKER_WIDTH: f32 = 480.0;
 pub(crate) const DOCK_WIDTH: f32 = 54.0;
 /// 作業領域が分からないときの高さ。
 const DOCK_FALLBACK_HEIGHT: f32 = 800.0;
-pub(crate) const DOCK_MARGIN: f32 = 12.0;
 
 /// 基準範囲の左右どちらかへ、幅 `width` のポップアップを `gap` だけ離して置くときの左端X座標。
 fn beside_x(anchor_left: f32, anchor_right: f32, open_left: bool, width: f32, gap: f32) -> f32 {
@@ -182,18 +181,15 @@ pub(crate) fn format_date_time(time: LocalTime) -> (String, String, String) {
     )
 }
 
-/// 起動時のDockの位置とサイズ。作業領域の右上に置き、高さは上下の余白を除いた作業領域いっぱいにする。
+/// 起動時のDockの位置とサイズ。作業領域の右端に付け、高さは作業領域いっぱいにする。
+/// 起動直後に `LauncherApp::apply_edge` が設定した端へ置き直す。
 pub(crate) fn dock_geometry(work_area: Option<egui::Rect>) -> ([f32; 2], [f32; 2]) {
     let Some(area) = work_area else {
         return ([0.0, 60.0], [DOCK_WIDTH, DOCK_FALLBACK_HEIGHT]);
     };
-    let height = area.height() - DOCK_MARGIN * 2.0;
     (
-        [
-            area.right() - DOCK_WIDTH - DOCK_MARGIN,
-            area.top() + DOCK_MARGIN,
-        ],
-        [DOCK_WIDTH, height],
+        [area.right() - DOCK_WIDTH, area.top()],
+        [DOCK_WIDTH, area.height()],
     )
 }
 
@@ -370,10 +366,10 @@ mod tests {
         let full_hd = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1920.0, 1032.0));
         assert_eq!(
             dock_geometry(Some(full_hd)),
-            ([1854.0, 12.0], [54.0, 1008.0])
+            ([1866.0, 0.0], [54.0, 1032.0])
         );
         let short = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1280.0, 600.0));
-        assert_eq!(dock_geometry(Some(short)), ([1214.0, 12.0], [54.0, 576.0]));
+        assert_eq!(dock_geometry(Some(short)), ([1226.0, 0.0], [54.0, 600.0]));
         assert_eq!(dock_geometry(None), ([0.0, 60.0], [54.0, 800.0]));
         let platform = FakePlatform {
             work_area: Some(full_hd),
@@ -381,7 +377,7 @@ mod tests {
         };
         assert_eq!(
             dock_geometry(platform.work_area()),
-            ([1854.0, 12.0], [54.0, 1008.0])
+            ([1866.0, 0.0], [54.0, 1032.0])
         );
     }
 }

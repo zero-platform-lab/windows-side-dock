@@ -3,19 +3,19 @@
 
 use crate::app::{ContextMenuTarget, LauncherApp};
 use crate::config::DockSide;
-use crate::layout::{directional_tooltip, DOCK_MARGIN, DOCK_WIDTH};
+use crate::layout::{directional_tooltip, DOCK_WIDTH};
 use eframe::egui::{self, Color32};
 
 /// しまったときに画面の端に残すつまみの幅。
 pub(crate) const COLLAPSED_WIDTH: f32 = 12.0;
 const MIN_DOCK_HEIGHT: f32 = 220.0;
 
-/// 確保する幅（論理ポイント）。引き出しているときはDockと左右の余白、しまっているときはつまみの幅。
+/// 確保する幅（論理ポイント）。Dockは画面の端に付けるため、Dockかつまみの幅そのもの。
 pub(crate) fn reserved_width(collapsed: bool) -> f32 {
     if collapsed {
         COLLAPSED_WIDTH
     } else {
-        DOCK_WIDTH + DOCK_MARGIN * 2.0
+        DOCK_WIDTH
     }
 }
 
@@ -27,14 +27,10 @@ pub(crate) fn dock_in_edge(
     scale: f32,
 ) -> (egui::Pos2, egui::Vec2) {
     let edge = egui::Rect::from_min_max(edge.min / scale, edge.max / scale);
-    if collapsed {
-        (edge.min, egui::vec2(COLLAPSED_WIDTH, edge.height()))
-    } else {
-        (
-            edge.min + egui::vec2(DOCK_MARGIN, DOCK_MARGIN),
-            egui::vec2(DOCK_WIDTH, edge.height() - DOCK_MARGIN * 2.0),
-        )
-    }
+    (
+        edge.min,
+        egui::vec2(reserved_width(collapsed), edge.height()),
+    )
 }
 
 /// 端を確保できなかったときの代わりの範囲。作業領域の `side` の端を使う。
@@ -47,17 +43,17 @@ fn fallback_edge(work_area: egui::Rect, side: DockSide, width: f32) -> egui::Rec
     edge
 }
 
-/// つまみは画面の内側だけ角を丸める。
-fn tab_corners(side: DockSide) -> egui::CornerRadius {
+/// Dockとつまみは画面の端に付くため、画面の内側の角だけを `radius` で丸める。
+pub(crate) fn inner_corners(side: DockSide, radius: u8) -> egui::CornerRadius {
     match side {
         DockSide::Left => egui::CornerRadius {
-            ne: 6,
-            se: 6,
+            ne: radius,
+            se: radius,
             ..Default::default()
         },
         DockSide::Right => egui::CornerRadius {
-            nw: 6,
-            sw: 6,
+            nw: radius,
+            sw: radius,
             ..Default::default()
         },
     }
@@ -120,7 +116,7 @@ impl LauncherApp {
                         1.0_f32,
                         Color32::from_rgba_unmultiplied(255, 255, 255, 55),
                     ))
-                    .corner_radius(tab_corners(self.dock_side)),
+                    .corner_radius(inner_corners(self.dock_side, 6)),
             )
             .show(ctx, |ui| {
                 let area = ui.max_rect();
@@ -192,16 +188,16 @@ mod tests {
 
     #[test]
     fn reserves_the_dock_with_margins_or_just_the_tab() {
-        assert_eq!(reserved_width(false), 78.0);
+        assert_eq!(reserved_width(false), DOCK_WIDTH);
         assert_eq!(reserved_width(true), COLLAPSED_WIDTH);
     }
 
     #[test]
     fn places_the_dock_inside_the_reserved_edge() {
-        let edge = rect(1842.0, 0.0, 1920.0, 1032.0);
+        let edge = rect(1866.0, 0.0, 1920.0, 1032.0);
         assert_eq!(
             dock_in_edge(edge, false, 1.0),
-            (egui::pos2(1854.0, 12.0), egui::vec2(54.0, 1008.0))
+            (egui::pos2(1866.0, 0.0), egui::vec2(54.0, 1032.0))
         );
         assert_eq!(
             dock_in_edge(rect(1908.0, 0.0, 1920.0, 1032.0), true, 1.0),
@@ -209,8 +205,8 @@ mod tests {
         );
         // 拡大率200%では物理ピクセルを半分にして論理ポイントへ直す。
         assert_eq!(
-            dock_in_edge(rect(3684.0, 0.0, 3840.0, 2064.0), false, 2.0),
-            (egui::pos2(1854.0, 12.0), egui::vec2(54.0, 1008.0))
+            dock_in_edge(rect(3732.0, 0.0, 3840.0, 2064.0), false, 2.0),
+            (egui::pos2(1866.0, 0.0), egui::vec2(54.0, 1032.0))
         );
     }
 
@@ -218,20 +214,20 @@ mod tests {
     fn falls_back_to_the_work_area_edge() {
         let work_area = rect(0.0, 0.0, 1920.0, 1032.0);
         assert_eq!(
-            fallback_edge(work_area, DockSide::Right, 78.0),
-            rect(1842.0, 0.0, 1920.0, 1032.0)
+            fallback_edge(work_area, DockSide::Right, 54.0),
+            rect(1866.0, 0.0, 1920.0, 1032.0)
         );
         assert_eq!(
-            fallback_edge(work_area, DockSide::Left, 78.0),
-            rect(0.0, 0.0, 78.0, 1032.0)
+            fallback_edge(work_area, DockSide::Left, 54.0),
+            rect(0.0, 0.0, 54.0, 1032.0)
         );
     }
 
     #[test]
-    fn rounds_only_the_inner_corners_of_the_tab() {
-        assert_eq!(tab_corners(DockSide::Right).nw, 6);
-        assert_eq!(tab_corners(DockSide::Right).ne, 0);
-        assert_eq!(tab_corners(DockSide::Left).ne, 6);
-        assert_eq!(tab_corners(DockSide::Left).nw, 0);
+    fn rounds_only_the_inner_corners() {
+        assert_eq!(inner_corners(DockSide::Right, 6).nw, 6);
+        assert_eq!(inner_corners(DockSide::Right, 6).ne, 0);
+        assert_eq!(inner_corners(DockSide::Left, 10).ne, 10);
+        assert_eq!(inner_corners(DockSide::Left, 10).nw, 0);
     }
 }

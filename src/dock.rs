@@ -1,5 +1,6 @@
 use crate::app::{ContextMenuTarget, LauncherApp};
 use crate::config::{DockSide, PopupDirection, ProcessTool};
+use crate::edge::inner_corners;
 use crate::layout::{
     directional_tooltip, format_date_time, next_repaint, settings_dialog_position, POLL_INTERVAL,
     SETTINGS_WIDTH,
@@ -131,7 +132,7 @@ impl LauncherApp {
                         1.0_f32,
                         Color32::from_rgba_unmultiplied(255, 255, 255, 55),
                     ))
-                    .corner_radius(10.0)
+                    .corner_radius(inner_corners(self.dock_side, 10))
                     .inner_margin(egui::Margin::symmetric(6, 8)),
             )
             .show(ctx, |ui| {

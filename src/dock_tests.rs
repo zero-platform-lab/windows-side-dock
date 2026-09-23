@@ -521,7 +521,7 @@ fn opens_dock_menu_from_gear_button() {
 fn with_edge() -> FakePlatform {
     FakePlatform {
         edge: Some(egui::Rect::from_min_max(
-            egui::pos2(1842.0, 0.0),
+            egui::pos2(1866.0, 0.0),
             egui::pos2(1920.0, 1032.0),
         )),
         ..FakePlatform::default()
@@ -534,16 +534,16 @@ fn reserves_the_right_edge_and_collapses_into_a_tab() {
     let mut harness = harness(app);
     assert_eq!(
         *platform.reservations.borrow(),
-        [(DockSide::Right, Some(78.0))]
+        [(DockSide::Right, Some(54.0))]
     );
     harness.state_mut().applied_collapsed = None;
     let commands = step_commands(&mut harness);
     assert!(
         commands.contains(&egui::ViewportCommand::OuterPosition(egui::pos2(
-            1854.0, 12.0
+            1866.0, 0.0
         )))
     );
-    assert!(commands.contains(&egui::ViewportCommand::InnerSize(egui::vec2(54.0, 1008.0))));
+    assert!(commands.contains(&egui::ViewportCommand::InnerSize(egui::vec2(54.0, 1032.0))));
 
     harness.get_by_label("Dockをしまう").click();
     harness.step();
@@ -591,7 +591,7 @@ fn collapses_at_the_work_area_edge_when_the_edge_cannot_be_reserved() {
     let commands = step_commands(&mut harness);
     assert!(
         commands.contains(&egui::ViewportCommand::OuterPosition(egui::pos2(
-            1854.0, 12.0
+            1866.0, 0.0
         )))
     );
 
@@ -614,7 +614,7 @@ fn moves_the_dock_to_the_left_edge_from_settings() {
     assert_eq!(harness.state().config.load_dock_side(), DockSide::Left);
     assert_eq!(
         platform.reservations.borrow().last(),
-        Some(&(DockSide::Left, Some(78.0)))
+        Some(&(DockSide::Left, Some(54.0)))
     );
     harness.state_mut().collapsed = true;
     harness.run();
