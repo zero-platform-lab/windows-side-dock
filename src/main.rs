@@ -411,7 +411,7 @@ impl App for LauncherApp {
                     );
                     directional_tooltip(
                         &settings_response,
-                        "Windows Side Dock 設定",
+                        "Dock 設定",
                         self.popup_direction.alignment(ctx),
                     );
                     if settings_response.clicked() {
@@ -772,7 +772,7 @@ impl LauncherApp {
                     )
                     .show(menu_ctx, |ui| match target {
                         ContextMenuTarget::Handle => {
-                            if ui.button("表示設定").clicked() {
+                            if ui.button("Dock 設定").clicked() {
                                 self.show_settings = true;
                                 menu_ctx.request_repaint();
                                 close = true;
