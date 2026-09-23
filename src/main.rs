@@ -22,6 +22,12 @@ enum PopupDirection {
     Right,
 }
 
+#[derive(Clone, Copy, PartialEq)]
+enum ProcessTool {
+    TaskManager,
+    ProcessExplorer,
+}
+
 #[derive(Clone, Copy)]
 enum ContextMenuTarget {
     Handle,
@@ -68,6 +74,8 @@ struct LauncherApp {
     context_menu: Option<(ContextMenuTarget, egui::Pos2, Instant)>,
     window_picker: Option<(String, Vec<RunningWindow>, egui::Pos2)>,
     confirm_close_all: bool,
+    process_tool: ProcessTool,
+    process_explorer_path: String,
 }
 
 impl LauncherApp {
@@ -112,6 +120,8 @@ impl LauncherApp {
             context_menu: None,
             window_picker: None,
             confirm_close_all: false,
+            process_tool: load_process_tool(),
+            process_explorer_path: load_process_explorer_path(),
         };
         app.load_registered();
         app
@@ -433,8 +443,8 @@ impl App for LauncherApp {
                 egui::ViewportId::from_hash_of("launcher-settings"),
                 egui::ViewportBuilder::default()
                     .with_title("ランチャー設定")
-                    .with_inner_size([320.0, 280.0])
-                    .with_min_inner_size([300.0, 250.0])
+                    .with_inner_size([380.0, 430.0])
+                    .with_min_inner_size([360.0, 400.0])
                     .with_position(position)
                     .with_resizable(false),
                 |settings_ctx, _class| {
@@ -469,6 +479,40 @@ impl App for LauncherApp {
                         if direction_changed {
                             save_popup_direction(self.popup_direction);
                         }
+                        ui.add_space(12.0);
+                        ui.label("システムモニター");
+                        let tool_changed = ui
+                            .radio_value(
+                                &mut self.process_tool,
+                                ProcessTool::TaskManager,
+                                "タスク マネージャー",
+                            )
+                            .changed()
+                            | ui.radio_value(
+                                &mut self.process_tool,
+                                ProcessTool::ProcessExplorer,
+                                "Process Explorer",
+                            )
+                            .changed();
+                        if tool_changed {
+                            save_process_tool(self.process_tool);
+                        }
+                        if self.process_tool == ProcessTool::ProcessExplorer {
+                            ui.label("Process Explorerのパス");
+                            let path_response = ui.add(
+                                egui::TextEdit::singleline(&mut self.process_explorer_path)
+                                    .hint_text(r"C:\Tools\ProcessExplorer\procexp64.exe"),
+                            );
+                            if path_response.changed() {
+                                save_process_explorer_path(&self.process_explorer_path);
+                            }
+                            if self.process_explorer_path.trim().is_empty() {
+                                ui.colored_label(
+                                    Color32::from_rgb(255, 175, 90),
+                                    "実行ファイルのパスを設定してください",
+                                );
+                            }
+                        }
                         settings_ctx.style_mut(|style| {
                             if let Some(font) = style.text_styles.get_mut(&egui::TextStyle::Body) {
                                 font.size = self.font_size;
@@ -493,6 +537,20 @@ impl App for LauncherApp {
 }
 
 impl LauncherApp {
+    fn launch_process_tool(&self) {
+        match self.process_tool {
+            ProcessTool::TaskManager => {
+                let _ = open_target("taskmgr.exe");
+            }
+            ProcessTool::ProcessExplorer => {
+                let path = self.process_explorer_path.trim();
+                if !path.is_empty() {
+                    let _ = open_target(path);
+                }
+            }
+        }
+    }
+
     fn show_window_picker_viewport(&mut self, ctx: &egui::Context) {
         let Some((name, windows, position)) = self.window_picker.clone() else {
             return;
@@ -572,19 +630,19 @@ impl LauncherApp {
             return;
         };
         let height = match target {
-            ContextMenuTarget::Handle => 54.0,
+            ContextMenuTarget::Handle => 98.0,
             ContextMenuTarget::Pinned(index) => {
                 if self
                     .items
                     .get(index)
                     .is_some_and(|item| !item.windows.is_empty())
                 {
-                    126.0
+                    170.0
                 } else {
-                    92.0
+                    136.0
                 }
             }
-            ContextMenuTarget::Running(_) => 92.0,
+            ContextMenuTarget::Running(_) => 136.0,
         };
         let mut close = false;
         ctx.show_viewport_immediate(
@@ -616,64 +674,84 @@ impl LauncherApp {
                             .corner_radius(8.0)
                             .inner_margin(egui::Margin::symmetric(8, 7)),
                     )
-                    .show(menu_ctx, |ui| match target {
-                        ContextMenuTarget::Handle => {
-                            if ui.button("表示設定").clicked() {
-                                self.show_settings = true;
-                                close = true;
-                            }
-                        }
-                        ContextMenuTarget::Pinned(index) => {
-                            if index >= self.items.len() {
-                                close = true;
-                                return;
-                            }
-                            let is_running = !self.items[index].windows.is_empty();
-                            if ui
-                                .button(if is_running {
-                                    "新しく起動"
-                                } else {
-                                    "起動"
-                                })
-                                .clicked()
-                            {
-                                self.launch(index);
-                                close = true;
-                            }
-                            if is_running && ui.button("ウィンドウへ移動").clicked() {
-                                let name = self.items[index].name.clone();
-                                let windows = self.items[index].windows.clone();
-                                self.open_or_activate_windows(name, windows, menu_ctx);
-                                close = true;
-                            }
-                            ui.separator();
-                            if index >= 4 {
-                                if ui.button("ピン留めを外す").clicked() {
-                                    self.items.remove(index);
-                                    self.selected =
-                                        self.selected.min(self.items.len().saturating_sub(1));
-                                    self.save_registered();
-                                    self.refresh_running();
+                    .show(menu_ctx, |ui| {
+                        match target {
+                            ContextMenuTarget::Handle => {
+                                if ui.button("表示設定").clicked() {
+                                    self.show_settings = true;
                                     close = true;
                                 }
-                            } else {
-                                ui.add_enabled(false, egui::Button::new("標準アイコン"));
+                            }
+                            ContextMenuTarget::Pinned(index) => {
+                                if index >= self.items.len() {
+                                    close = true;
+                                    return;
+                                }
+                                let is_running = !self.items[index].windows.is_empty();
+                                if ui
+                                    .button(if is_running {
+                                        "新しく起動"
+                                    } else {
+                                        "起動"
+                                    })
+                                    .clicked()
+                                {
+                                    self.launch(index);
+                                    close = true;
+                                }
+                                if is_running && ui.button("ウィンドウへ移動").clicked() {
+                                    let name = self.items[index].name.clone();
+                                    let windows = self.items[index].windows.clone();
+                                    self.open_or_activate_windows(name, windows, menu_ctx);
+                                    close = true;
+                                }
+                                ui.separator();
+                                if index >= 4 {
+                                    if ui.button("ピン留めを外す").clicked() {
+                                        self.items.remove(index);
+                                        self.selected =
+                                            self.selected.min(self.items.len().saturating_sub(1));
+                                        self.save_registered();
+                                        self.refresh_running();
+                                        close = true;
+                                    }
+                                } else {
+                                    ui.add_enabled(false, egui::Button::new("標準アイコン"));
+                                }
+                            }
+                            ContextMenuTarget::Running(index) => {
+                                if index >= self.running.len() {
+                                    close = true;
+                                    return;
+                                }
+                                if ui.button("ウィンドウへ移動").clicked() {
+                                    self.activate_running(index, menu_ctx);
+                                    close = true;
+                                }
+                                ui.separator();
+                                if ui.button("ピン留めする").clicked() {
+                                    self.pin_running(index);
+                                    close = true;
+                                }
                             }
                         }
-                        ContextMenuTarget::Running(index) => {
-                            if index >= self.running.len() {
-                                close = true;
-                                return;
-                            }
-                            if ui.button("ウィンドウへ移動").clicked() {
-                                self.activate_running(index, menu_ctx);
-                                close = true;
-                            }
-                            ui.separator();
-                            if ui.button("ピン留めする").clicked() {
-                                self.pin_running(index);
-                                close = true;
-                            }
+                        ui.separator();
+                        let tool_label = match self.process_tool {
+                            ProcessTool::TaskManager => "タスク マネージャー",
+                            ProcessTool::ProcessExplorer => "Process Explorer",
+                        };
+                        let tool_ready = self.process_tool == ProcessTool::TaskManager
+                            || Path::new(self.process_explorer_path.trim()).is_file();
+                        if ui
+                            .add_enabled(tool_ready, egui::Button::new(tool_label))
+                            .clicked()
+                        {
+                            self.launch_process_tool();
+                            close = true;
+                        }
+                        if !tool_ready && ui.small_button("パスを設定…").clicked() {
+                            self.show_settings = true;
+                            close = true;
                         }
                     });
                 if close {
@@ -1207,6 +1285,59 @@ fn save_popup_direction(direction: PopupDirection) {
         PopupDirection::Right => "right",
     };
     let _ = std::fs::write(path, value);
+}
+
+fn process_tool_path() -> Option<PathBuf> {
+    std::env::var_os("LOCALAPPDATA")
+        .map(|root| PathBuf::from(root).join(r"lancher\process_tool.txt"))
+}
+
+fn process_explorer_path_file() -> Option<PathBuf> {
+    std::env::var_os("LOCALAPPDATA")
+        .map(|root| PathBuf::from(root).join(r"lancher\process_explorer_path.txt"))
+}
+
+fn load_process_tool() -> ProcessTool {
+    let Some(path) = process_tool_path() else {
+        return ProcessTool::TaskManager;
+    };
+    match std::fs::read_to_string(path).as_deref().map(str::trim) {
+        Ok("process_explorer") => ProcessTool::ProcessExplorer,
+        _ => ProcessTool::TaskManager,
+    }
+}
+
+fn save_process_tool(tool: ProcessTool) {
+    let Some(path) = process_tool_path() else {
+        return;
+    };
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let value = match tool {
+        ProcessTool::TaskManager => "task_manager",
+        ProcessTool::ProcessExplorer => "process_explorer",
+    };
+    let _ = std::fs::write(path, value);
+}
+
+fn load_process_explorer_path() -> String {
+    let Some(path) = process_explorer_path_file() else {
+        return String::new();
+    };
+    std::fs::read_to_string(path)
+        .map(|value| value.trim().to_owned())
+        .unwrap_or_default()
+}
+
+fn save_process_explorer_path(value: &str) {
+    let Some(path) = process_explorer_path_file() else {
+        return;
+    };
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let _ = std::fs::write(path, value.trim());
 }
 
 #[cfg(windows)]
