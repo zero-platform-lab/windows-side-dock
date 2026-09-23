@@ -47,6 +47,8 @@ MSI生成:
 - Process Explorerのファイル選択ダイアログ
 - Windows設定の `ms-settings:` 起動と既存ウィンドウへの移動
 - Dock背景の右クリックメニュー
+- タスクトレイのアイコン（左クリックでDockの表示／非表示、右クリックでDock 設定・システムモニター・終了）
+- ログオン時の自動起動（MSIが `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` の `WindowsSideDock` を登録・削除）
 
 ## 右クリック操作
 
@@ -105,7 +107,7 @@ Windows 11では「その他のオプションを確認」側に表示される�
 - 計測: `.\scripts\coverage.ps1`（HTMLで見る場合は `-Html`）。nightly、llvm-tools、`cargo-llvm-cov 0.9.1` が必要で、いずれもインストール済み
 - 現在: 自動テスト112件。分岐 266/266、行・リージョン・関数とも100%
 - スクリプトは毎回 `cargo llvm-cov clean` してから測る。古いテスト実行ファイルが残ると、行番号のずれた誤った結果になるため
-- 計測対象外（`coverage(off)`）: `win32.rs`（OSを実際に操作する層）と `main()`（eframe起動）だけ。ここへ判断ロジックを置かないこと
+- 計測対象外（`coverage(off)`）: `win32.rs`・`win32_tray.rs`（OSを実際に操作する層）と `main()`（eframe起動）だけ。ここへ判断ロジックを置かないこと
 
 テストの仕組み:
 
@@ -125,6 +127,7 @@ Windows 11では「その他のオプションを確認」側に表示される�
 - `config.rs`: `ConfigStore`（設定と登録項目の永続化、旧保存先からの移行）
 - `platform.rs`: `Platform` トレイトと、それを使うウィンドウ操作の判断
 - `win32.rs`: `Platform` のWin32実装（計測対象外）
+- `win32_tray.rs`: タスクトレイのアイコンとメニュー（計測対象外）。メニュー操作は `TrayAction` として待ち行列に積み、`LauncherApp::handle_tray_actions` が処理する。Dockの表示／非表示だけはeguiが非表示中に描画を止めるため、ここで直接切り替える
 - `app.rs`: アプリ状態と操作
 - `dock.rs`: Dock本体と設定画面
 - `context_menu.rs`: 右クリックメニューとウィンドウ選択
@@ -136,7 +139,8 @@ Windows 11では「その他のオプションを確認」側に表示される�
 
 優先度が高い未完了事項:
 
-なし（2026-09-23時点）。
+1. Windows 11の新しい（短縮版の）右クリックメニューへの登録。IExplorerCommandを実装したシェル拡張DLLと、パッケージIDを付けるスパースMSIXパッケージが必要で、MSIXには署名が要る（自己署名＋この PC の TrustedPeople への登録、またはGitHub Actions＋Azure Trusted Signing）。ユーザー判断で後回し（2026-09-23）。
+2. アプリのアイコン（exe・スタートメニュー・トレイ）。現在トレイは `win32_tray.rs` のコードで描いた仮のアイコン、exeはアイコンなし。
 
 GitHub Releasesを使った自動更新はユーザー判断により対象外（2026-09-23）。更新は新しいMSIを手動で実行する方式とする。
 
@@ -148,7 +152,7 @@ GitHub Releasesを使った自動更新はユーザー判断により対象外�
 - インストール先: `%LOCALAPPDATA%\Programs\Windows Side Dock`
 - Package ID: `ZeroPlatformLab.WindowsSideDock`（変更しないこと）
 - バージョン元: `Cargo.toml`
-- 現在のバージョン: `0.1.11`
+- 現在のバージョン: `0.1.12`
 - `build-installer.ps1` はUTF-8のため、Windows PowerShell 5.1ではなくPowerShell 7（`pwsh`）で実行すること
 - `MajorUpgrade`で旧版を置換し、ダウングレードを拒否
 - 同一バージョンの開発用再インストールを許可

@@ -59,10 +59,22 @@
       <RegistryValue Root="HKCU" Key="Software\Classes\Directory\Background\Shell\WindowsSideDock\shell\02ProcessTool\command" Type="string" Value="taskmgr.exe" />
     </Component>
 
+    <!-- ログオン時にDockを自動起動する。アンインストールで削除される。 -->
+    <Component Id="StartupRegistration" Directory="INSTALLFOLDER" Guid="31646E5E-58EE-416F-8181-7B1D6EFDCBA3">
+      <RegistryValue
+        Root="HKCU"
+        Key="Software\Microsoft\Windows\CurrentVersion\Run"
+        Name="WindowsSideDock"
+        Type="string"
+        Value="&quot;[INSTALLFOLDER]windows-side-dock.exe&quot;"
+        KeyPath="yes" />
+    </Component>
+
     <Feature Id="MainFeature" Title="Windows Side Dock" Level="1">
       <ComponentRef Id="ApplicationFiles" />
       <ComponentRef Id="DesktopBackgroundMenu" />
       <ComponentRef Id="DirectoryBackgroundMenu" />
+      <ComponentRef Id="StartupRegistration" />
     </Feature>
 
     <CustomAction

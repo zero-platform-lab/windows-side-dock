@@ -33,6 +33,7 @@ impl LauncherApp {
             self.last_refresh = Instant::now();
         }
         ctx.request_repaint_after(REFRESH_INTERVAL);
+        self.handle_tray_actions(ctx);
         self.handle_input(ctx);
         self.show_dock(ctx);
         if self.show_settings {

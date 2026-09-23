@@ -1,9 +1,9 @@
 //! テスト用の偽のOS。操作を `calls` に記録し、問い合わせの戻り値はフィールドで指定する。
 
-use super::{LocalTime, Platform};
+use super::{LocalTime, Platform, TrayAction};
 use eframe::egui;
 use std::cell::RefCell;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 
 pub(crate) struct FakePlatform {
     pub(crate) calls: RefCell<Vec<String>>,
@@ -23,6 +23,7 @@ pub(crate) struct FakePlatform {
     pub(crate) registry_keys: Vec<String>,
     /// 書き込まれた値。キーは `key|subkey|name`。
     pub(crate) registry_values: RefCell<BTreeMap<String, String>>,
+    pub(crate) tray_actions: RefCell<VecDeque<TrayAction>>,
 }
 
 impl Default for FakePlatform {
@@ -52,6 +53,7 @@ impl Default for FakePlatform {
             install_directory: Some(std::path::PathBuf::from(r"C:\Dock")),
             registry_keys: Vec::new(),
             registry_values: RefCell::default(),
+            tray_actions: RefCell::default(),
         }
     }
 }
@@ -120,6 +122,9 @@ impl Platform for FakePlatform {
     }
     fn registry_key_exists(&self, key: &str) -> bool {
         self.registry_keys.iter().any(|existing| existing == key)
+    }
+    fn take_tray_action(&self) -> Option<TrayAction> {
+        self.tray_actions.borrow_mut().pop_front()
     }
     fn set_registry_string(&self, key: &str, subkey: &str, name: &str, value: &str) {
         self.registry_values

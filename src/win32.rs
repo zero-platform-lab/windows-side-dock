@@ -2,14 +2,17 @@
 //! 実行中のプログラム起動・実ウィンドウ操作・レジストリ書き込み・モーダルダイアログを伴うため、
 //! 自動テストとカバレッジ計測の対象外にしている（`main.rs` の `coverage(off)`）。
 
-use crate::platform::{LocalTime, Platform};
+use crate::platform::{LocalTime, Platform, TrayAction};
+use crate::win32_tray::TrayQueue;
 use eframe::egui;
 use std::ffi::OsStr;
 use std::os::windows::ffi::OsStrExt;
 use windows_sys::Win32::Foundation::{HWND, POINT, RECT};
 use windows_sys::Win32::UI::WindowsAndMessaging::{FindWindowW, GetWindowRect};
 
-pub(crate) struct WindowsPlatform;
+pub(crate) struct WindowsPlatform {
+    pub(crate) tray_actions: TrayQueue,
+}
 
 fn wide(value: &str) -> Vec<u16> {
     OsStr::new(value).encode_wide().chain(Some(0)).collect()
@@ -208,6 +211,10 @@ impl Platform for WindowsPlatform {
         std::env::current_exe()
             .ok()
             .and_then(|path| path.parent().map(std::path::Path::to_path_buf))
+    }
+
+    fn take_tray_action(&self) -> Option<TrayAction> {
+        self.tray_actions.lock().ok()?.pop_front()
     }
 
     fn registry_key_exists(&self, key: &str) -> bool {

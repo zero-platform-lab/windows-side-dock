@@ -532,3 +532,20 @@ fn opens_dock_menu_from_gear_button() {
     );
     assert!(!harness.state().show_settings);
 }
+
+#[test]
+fn handles_tray_menu_actions() {
+    use crate::platform::TrayAction;
+    let (app, platform) = app_with(FakePlatform::default(), "dock-tray");
+    platform
+        .tray_actions
+        .replace([TrayAction::OpenSettings, TrayAction::LaunchProcessTool].into());
+    let mut harness = harness(app);
+    assert!(harness.state().show_settings);
+    assert_eq!(platform.calls(), ["open taskmgr.exe"]);
+    platform
+        .tray_actions
+        .borrow_mut()
+        .push_back(TrayAction::Quit);
+    assert!(step_commands(&mut harness).contains(&egui::ViewportCommand::Close));
+}

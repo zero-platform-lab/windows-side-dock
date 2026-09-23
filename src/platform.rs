@@ -11,6 +11,14 @@ pub(crate) struct LocalTime {
     pub(crate) minute: u16,
 }
 
+/// タスクトレイのメニューから届く操作。Dockの表示切り替えはOS側で直接行うため含まない。
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum TrayAction {
+    OpenSettings,
+    LaunchProcessTool,
+    Quit,
+}
+
 /// OSへの問い合わせと操作。実装は `win32.rs`、テストでは記録用の偽物を使う。
 /// 判断を伴う処理はここへ置かず、呼び出し側の関数でテストする。
 pub(crate) trait Platform {
@@ -37,6 +45,8 @@ pub(crate) trait Platform {
     fn registry_key_exists(&self, key: &str) -> bool;
     /// `HKEY_CURRENT_USER\key\subkey` の文字列値を書き込む。キーがなければ作られる。
     fn set_registry_string(&self, key: &str, subkey: &str, name: &str, value: &str);
+    /// タスクトレイから届いた操作を古い順に1つ取り出す。
+    fn take_tray_action(&self) -> Option<TrayAction>;
 }
 
 pub(crate) fn running_apps(platform: &dyn Platform) -> Vec<LauncherItem> {
@@ -131,6 +141,9 @@ impl Platform for NullPlatform {
         false
     }
     fn set_registry_string(&self, _key: &str, _subkey: &str, _name: &str, _value: &str) {}
+    fn take_tray_action(&self) -> Option<TrayAction> {
+        None
+    }
 }
 
 #[cfg(test)]

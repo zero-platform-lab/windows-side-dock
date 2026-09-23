@@ -4,7 +4,7 @@ use crate::model::{
     assign_running, item_name_for_path, registered_entries, IconKind, LauncherItem, RunningWindow,
     BUILTIN_ITEM_COUNT,
 };
-use crate::platform::{activate_windows, running_apps, Platform};
+use crate::platform::{activate_windows, running_apps, Platform, TrayAction};
 use crate::shell_menu::sync_process_tool_menu;
 use crate::ui::normalized_executable_path;
 use eframe::egui;
@@ -40,6 +40,8 @@ pub(crate) struct LauncherApp {
     pub(crate) process_tool: ProcessTool,
     pub(crate) process_explorer_path: String,
     pub(crate) monitor_status: Option<String>,
+    /// タスクトレイのアイコン。破棄するとトレイから消えるため、アプリの寿命と合わせて保持する。
+    pub(crate) tray: Option<Box<dyn std::any::Any>>,
 }
 
 impl LauncherApp {
@@ -99,6 +101,7 @@ impl LauncherApp {
             process_tool: config.load_process_tool(),
             process_explorer_path: config.load_process_explorer_path(),
             monitor_status: None,
+            tray: None,
             platform,
             config,
         };
@@ -251,6 +254,19 @@ impl LauncherApp {
             self.show_settings = true;
         }
         opened
+    }
+
+    /// タスクトレイのメニューで選ばれた操作を処理する。
+    pub(crate) fn handle_tray_actions(&mut self, ctx: &egui::Context) {
+        while let Some(action) = self.platform.take_tray_action() {
+            match action {
+                TrayAction::OpenSettings => self.show_settings = true,
+                TrayAction::LaunchProcessTool => {
+                    self.launch_process_tool();
+                }
+                TrayAction::Quit => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
+            }
+        }
     }
 
     pub(crate) fn set_popup_direction(&mut self, direction: PopupDirection) {

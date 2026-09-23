@@ -15,6 +15,9 @@ mod ui;
 #[cfg(windows)]
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod win32;
+#[cfg(windows)]
+#[cfg_attr(coverage_nightly, coverage(off))]
+mod win32_tray;
 
 use app::LauncherApp;
 use config::ConfigStore;
@@ -24,20 +27,40 @@ use platform::Platform;
 use std::rc::Rc;
 use theme::{japanese_fonts, JAPANESE_FONT_PATH};
 
+/// OSの実装と、タスクトレイの操作をその実装へ届ける待ち行列。
 #[cfg(windows)]
-fn system_platform() -> Rc<dyn Platform> {
-    Rc::new(win32::WindowsPlatform)
+fn system_platform() -> (Rc<dyn Platform>, win32_tray::TrayQueue) {
+    let tray_actions = win32_tray::TrayQueue::default();
+    let platform = win32::WindowsPlatform {
+        tray_actions: tray_actions.clone(),
+    };
+    (Rc::new(platform), tray_actions)
 }
 
 #[cfg(not(windows))]
-fn system_platform() -> Rc<dyn Platform> {
-    Rc::new(platform::NullPlatform)
+fn system_platform() -> (Rc<dyn Platform>, ()) {
+    (Rc::new(platform::NullPlatform), ())
+}
+
+#[cfg(windows)]
+#[cfg_attr(coverage_nightly, coverage(off))]
+fn install_tray(
+    ctx: &egui::Context,
+    queue: win32_tray::TrayQueue,
+) -> Option<Box<dyn std::any::Any>> {
+    win32_tray::install_tray(ctx.clone(), queue)
+        .map(|tray| Box::new(tray) as Box<dyn std::any::Any>)
+}
+
+#[cfg(not(windows))]
+fn install_tray(_ctx: &egui::Context, _queue: ()) -> Option<Box<dyn std::any::Any>> {
+    None
 }
 
 // eframeのイベントループを起動するだけで、テストからは実行できない。
 #[cfg_attr(coverage_nightly, coverage(off))]
 fn main() -> eframe::Result {
-    let platform = system_platform();
+    let (platform, tray_actions) = system_platform();
     let (position, size) = dock_geometry(platform.work_area());
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -63,12 +86,14 @@ fn main() -> eframe::Result {
             if let Some(fonts) = japanese_fonts(JAPANESE_FONT_PATH) {
                 cc.egui_ctx.set_fonts(fonts);
             }
-            Ok(Box::new(LauncherApp::new(
+            let mut app = LauncherApp::new(
                 platform,
                 ConfigStore::from_env(),
                 &windows_dir,
                 &local_app_data,
-            )))
+            );
+            app.tray = install_tray(&cc.egui_ctx, tray_actions);
+            Ok(Box::new(app))
         }),
     )
 }
@@ -79,7 +104,16 @@ mod tests {
 
     #[test]
     fn uses_the_operating_system_platform() {
-        let platform = system_platform();
+        let (platform, tray_actions) = system_platform();
         assert_eq!(Rc::strong_count(&platform), 1);
+        tray_actions
+            .lock()
+            .unwrap()
+            .push_back(platform::TrayAction::Quit);
+        assert_eq!(
+            platform.take_tray_action(),
+            Some(platform::TrayAction::Quit)
+        );
+        assert_eq!(platform.take_tray_action(), None);
     }
 }
