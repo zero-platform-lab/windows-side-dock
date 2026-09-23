@@ -184,6 +184,14 @@ impl LauncherApp {
         if index >= self.items.len() {
             return;
         }
+        if self.items[index]
+            .command
+            .eq_ignore_ascii_case("ms-settings:")
+            && !self.items[index].windows.is_empty()
+        {
+            activate_taskbar_item(&self.items[index].windows);
+            return;
+        }
         let command = self.items[index].command.clone();
         let _ = open_target(&command);
     }
@@ -1038,6 +1046,14 @@ fn normalized_name(value: &str) -> String {
 
 fn same_application(pinned: &LauncherItem, running: &LauncherItem) -> bool {
     if pinned.command.eq_ignore_ascii_case(&running.command) {
+        return true;
+    }
+    if pinned.command.eq_ignore_ascii_case("ms-settings:")
+        && Path::new(&running.command)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.eq_ignore_ascii_case("SystemSettings.exe"))
+    {
         return true;
     }
     let pinned_name = normalized_name(&pinned.name);
