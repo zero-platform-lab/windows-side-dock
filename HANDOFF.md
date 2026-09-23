@@ -93,6 +93,7 @@ Windows 11では「その他のオプションを確認」側に表示される�
 - 通常表示中のウィンドウへ移動するときは `SW_RESTORE` を呼ばない。最小化中だけ復元する。無条件復元はちらつきの原因になる。
 - 子Viewportは最初の未描画フレームを非表示にしてから表示する。ツールチップと右クリックメニューのちらつき対策。
 - ツールチップ表示中は位置を固定し、クリック成立フレームでは生成しない。
+- 右クリックメニューとウィンドウ選択画面は、横位置をDockの端、縦位置をカーソルの高さに合わせる（`layout::beside_dock_at_cursor`）。カーソル基準に戻すとDockに重なる。
 - Dockは最大化／全画面化を解除し、独自ドラッグで移動する。Windowsスナップによる不自然な挙動を避けるため。
 - Process Explorerは現在 `E:\Downloads\ProcessExplorer\procexp.exe` が設定されている。
 
@@ -141,7 +142,7 @@ GitHub Releasesを使った自動更新はユーザー判断により対象外�
 - インストール先: `%LOCALAPPDATA%\Programs\Windows Side Dock`
 - Package ID: `ZeroPlatformLab.WindowsSideDock`（変更しないこと）
 - バージョン元: `Cargo.toml`
-- 現在のバージョン: `0.1.4`
+- 現在のバージョン: `0.1.5`
 - `build-installer.ps1` はUTF-8のため、Windows PowerShell 5.1ではなくPowerShell 7（`pwsh`）で実行すること
 - `MajorUpgrade`で旧版を置換し、ダウングレードを拒否
 - 同一バージョンの開発用再インストールを許可

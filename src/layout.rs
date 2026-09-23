@@ -199,40 +199,41 @@ pub(crate) fn directional_tooltip(
     );
 }
 
+/// 横位置はDockの左右の端、縦位置はカーソルの高さを基準にする。
+/// Dockが見つからない場合はカーソル位置を基準にする。
 #[cfg(windows)]
-pub(crate) fn context_menu_screen_position(open_left: bool) -> Option<egui::Pos2> {
-    use windows_sys::Win32::Foundation::POINT;
-    use windows_sys::Win32::UI::WindowsAndMessaging::GetCursorPos;
+fn beside_dock_at_cursor(open_left: bool, width: f32) -> Option<egui::Pos2> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Foundation::{POINT, RECT};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{FindWindowW, GetCursorPos, GetWindowRect};
+
     let mut cursor = POINT::default();
     if unsafe { GetCursorPos(&mut cursor) } == 0 {
         return None;
     }
-    let x = beside_x(
-        cursor.x as f32,
-        cursor.x as f32,
-        open_left,
-        CONTEXT_MENU_WIDTH,
-        8.0,
-    );
+    let title: Vec<u16> = std::ffi::OsStr::new("Windows Side Dock")
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
+    let window = unsafe { FindWindowW(std::ptr::null(), title.as_ptr()) };
+    let mut rect = RECT::default();
+    let (left, right) = if !window.is_null() && unsafe { GetWindowRect(window, &mut rect) } != 0 {
+        (rect.left as f32, rect.right as f32)
+    } else {
+        (cursor.x as f32, cursor.x as f32)
+    };
+    let x = beside_x(left, right, open_left, width, 8.0);
     Some(egui::pos2(x, cursor.y as f32))
 }
 
 #[cfg(windows)]
+pub(crate) fn context_menu_screen_position(open_left: bool) -> Option<egui::Pos2> {
+    beside_dock_at_cursor(open_left, CONTEXT_MENU_WIDTH)
+}
+
+#[cfg(windows)]
 pub(crate) fn window_picker_screen_position(open_left: bool) -> Option<egui::Pos2> {
-    use windows_sys::Win32::Foundation::POINT;
-    use windows_sys::Win32::UI::WindowsAndMessaging::GetCursorPos;
-    let mut cursor = POINT::default();
-    if unsafe { GetCursorPos(&mut cursor) } == 0 {
-        return None;
-    }
-    let x = beside_x(
-        cursor.x as f32,
-        cursor.x as f32,
-        open_left,
-        WINDOW_PICKER_WIDTH,
-        8.0,
-    );
-    Some(egui::pos2(x, cursor.y as f32))
+    beside_dock_at_cursor(open_left, WINDOW_PICKER_WIDTH)
 }
 
 #[cfg(not(windows))]
