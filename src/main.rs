@@ -403,6 +403,7 @@ impl App for LauncherApp {
                     );
                     if settings_response.clicked() {
                         self.show_settings = true;
+                        ctx.request_repaint();
                     }
                     ui.add_space(3.0);
                     for index in 0..self.items.len() {
@@ -454,7 +455,10 @@ impl App for LauncherApp {
                     .with_inner_size([380.0, 430.0])
                     .with_min_inner_size([360.0, 400.0])
                     .with_position(position)
-                    .with_resizable(false),
+                    .with_resizable(false)
+                    .with_taskbar(false)
+                    .with_always_on_top()
+                    .with_active(true),
                 |settings_ctx, _class| {
                     if settings_ctx.input(|input| input.viewport().close_requested()) {
                         self.show_settings = false;
@@ -746,6 +750,7 @@ impl LauncherApp {
                         ContextMenuTarget::Handle => {
                             if ui.button("表示設定").clicked() {
                                 self.show_settings = true;
+                                menu_ctx.request_repaint();
                                 close = true;
                             }
                         }
@@ -765,6 +770,7 @@ impl LauncherApp {
                             }
                             if !tool_ready && ui.small_button("パスを設定…").clicked() {
                                 self.show_settings = true;
+                                menu_ctx.request_repaint();
                                 close = true;
                             }
                         }
