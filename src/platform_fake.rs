@@ -13,6 +13,8 @@ pub(crate) struct FakePlatform {
     pub(crate) foreground: isize,
     pub(crate) minimized: Vec<isize>,
     pub(crate) icons: bool,
+    /// どの実行ファイルにも返す「ファイルの説明」。
+    pub(crate) app_name: Option<String>,
     pub(crate) cursor: Option<egui::Pos2>,
     pub(crate) dock: Option<egui::Rect>,
     pub(crate) work_area: Option<egui::Rect>,
@@ -41,6 +43,7 @@ impl Default for FakePlatform {
             foreground: 0,
             minimized: Vec::new(),
             icons: false,
+            app_name: None,
             cursor: Some(egui::pos2(1880.0, 300.0)),
             dock: Some(egui::Rect::from_min_max(
                 egui::pos2(1854.0, 12.0),
@@ -110,6 +113,9 @@ impl Platform for FakePlatform {
     fn load_icon(&self, _path: &str) -> Option<egui::ColorImage> {
         self.icons
             .then(|| egui::ColorImage::filled([2, 2], egui::Color32::RED))
+    }
+    fn app_name(&self, _path: &str) -> Option<String> {
+        self.app_name.clone()
     }
     fn cursor_position(&self) -> Option<egui::Pos2> {
         self.cursor

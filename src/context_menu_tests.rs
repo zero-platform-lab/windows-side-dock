@@ -1,6 +1,6 @@
 use super::*;
 use crate::app::new_item;
-use crate::config::{temp_root, ConfigStore, DockSide};
+use crate::config::{temp_root, upgraded_store, DockSide};
 use crate::model::{IconKind, LauncherItem};
 use crate::platform::fake::FakePlatform;
 use egui_kittest::kittest::Queryable;
@@ -24,7 +24,7 @@ fn running_item(name: &str, handles: &[isize]) -> LauncherItem {
 
 fn app(test: &str, platform: FakePlatform) -> (LauncherApp, Rc<FakePlatform>) {
     let platform = Rc::new(platform);
-    let config = ConfigStore::new(Some(temp_root(test)));
+    let config = upgraded_store(test);
     let mut app = LauncherApp::new(platform.clone(), config, r"C:\Windows", r"C:\Local");
     app.add_path(std::path::Path::new(r"C:\Apps\Code.exe"));
     app.running = vec![
@@ -192,7 +192,7 @@ fn clock_menu_launches_ready_process_explorer() {
 }
 
 #[test]
-fn pinned_menu_launches_idle_items_and_protects_builtin_icons() {
+fn pinned_menu_launches_idle_items() {
     let (mut harness, platform) = menu_harness(
         "menu-pinned",
         FakePlatform::default(),
@@ -200,7 +200,8 @@ fn pinned_menu_launches_idle_items_and_protects_builtin_icons() {
     );
     harness.run();
     assert!(harness.query_by_label("ウィンドウへ移動").is_none());
-    assert!(harness.query_by_label("標準アイコン").is_some());
+    assert!(harness.query_by_label("プロパティ").is_some());
+    assert!(harness.query_by_label("ピン留めを外す").is_some());
     click(&mut harness, "起動");
     assert_eq!(platform.calls(), [r"open C:\Windows\explorer.exe"]);
     assert!(harness.state().context_menu.is_none());
@@ -279,14 +280,25 @@ fn pinned_menu_runs_as_admin_opens_location_and_shows_properties() {
 
 #[test]
 fn running_menu_shows_file_actions() {
-    let (mut harness, platform) = menu_harness(
-        "menu-running-file-actions",
-        FakePlatform::default(),
-        ContextMenuTarget::Running(0),
-    );
+    let (mut app, platform) = app("menu-running-file-actions", FakePlatform::default());
+    app.running[0].command = r"C:\Apps\Chrome.exe".into();
+    open_menu(&mut app, ContextMenuTarget::Running(0));
+    let mut harness = harness(app);
     click(&mut harness, "プロパティ");
-    assert_eq!(platform.calls(), ["Properties Chrome"]);
+    assert_eq!(platform.calls(), [r"Properties C:\Apps\Chrome.exe"]);
     assert!(harness.state().context_menu.is_none());
+}
+
+#[test]
+fn settings_menu_has_no_file_actions() {
+    let (mut harness, _platform) = menu_harness(
+        "menu-settings-uri",
+        FakePlatform::default(),
+        ContextMenuTarget::Pinned(3),
+    );
+    harness.run();
+    assert!(harness.query_by_label("プロパティ").is_none());
+    assert!(harness.query_by_label("ピン留めを外す").is_some());
 }
 
 #[test]
@@ -297,7 +309,7 @@ fn pinned_menu_unpins_registered_items() {
         ContextMenuTarget::Pinned(4),
     );
     click(&mut harness, "ピン留めを外す");
-    assert_eq!(harness.state().items.len(), BUILTIN_ITEM_COUNT);
+    assert_eq!(harness.state().items.len(), 4);
     assert!(harness.state().context_menu.is_none());
 }
 

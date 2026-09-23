@@ -1,6 +1,6 @@
 use super::*;
 use crate::app::new_item;
-use crate::config::{temp_root, ConfigStore, DockSide};
+use crate::config::{temp_root, upgraded_store, DockSide};
 use crate::model::{LauncherItem, RunningWindow};
 use crate::platform::fake::FakePlatform;
 use egui_kittest::kittest::Queryable;
@@ -11,7 +11,7 @@ use std::time::Duration;
 
 fn app_with(platform: FakePlatform, test: &str) -> (LauncherApp, Rc<FakePlatform>) {
     let platform = Rc::new(platform);
-    let config = ConfigStore::new(Some(temp_root(test)));
+    let config = upgraded_store(test);
     let app = LauncherApp::new(platform.clone(), config, r"C:\Windows", r"C:\Local");
     (app, platform)
 }
@@ -177,9 +177,13 @@ fn moves_selection_with_arrow_keys_and_launches_with_enter() {
 }
 
 #[test]
-fn closes_on_escape() {
-    let (mut harness, _platform) = dock("dock-escape");
-    assert!(press(&mut harness, egui::Key::Escape).contains(&egui::ViewportCommand::Close));
+fn keeps_running_on_escape_and_ignores_keys_without_items() {
+    let (mut harness, platform) = dock("dock-escape");
+    assert!(!press(&mut harness, egui::Key::Escape).contains(&egui::ViewportCommand::Close));
+    harness.state_mut().items.clear();
+    press(&mut harness, egui::Key::ArrowRight);
+    press(&mut harness, egui::Key::Enter);
+    assert!(platform.calls().is_empty());
 }
 
 #[test]

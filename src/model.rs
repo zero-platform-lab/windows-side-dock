@@ -1,6 +1,6 @@
 use std::path::Path;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum IconKind {
     Folder,
     Terminal,
@@ -66,15 +66,30 @@ pub(crate) fn friendly_window_name(title: &str, fallback: &str) -> String {
         .to_owned()
 }
 
-/// 先頭に固定で並ぶ標準アイコン（エクスプローラー、ターミナル、メモ帳、Windows 設定）の数。
-/// これより後ろがユーザー登録項目で、保存とピン留め解除の対象になる。
-pub(crate) const BUILTIN_ITEM_COUNT: usize = 4;
+/// コマンドに合う代わりのアイコンと、アイコンを取り出すファイル。
+/// Windows 設定はURIなので、設定アプリの実行ファイルからアイコンを取り出す。
+pub(crate) fn fallback_icon(command: &str, windows_dir: &str) -> (IconKind, String) {
+    let lower = command.to_ascii_lowercase();
+    if lower == "ms-settings:" {
+        let source = format!(r"{windows_dir}\ImmersiveControlPanel\SystemSettings.exe");
+        return (IconKind::Settings, source);
+    }
+    let kind = if lower.ends_with(r"\explorer.exe") {
+        IconKind::Folder
+    } else if lower.ends_with(r"\wt.exe") {
+        IconKind::Terminal
+    } else if lower.ends_with(r"\notepad.exe") {
+        IconKind::Note
+    } else {
+        IconKind::File
+    };
+    (kind, command.to_owned())
+}
 
-/// ユーザー登録項目の `(名前, コマンド)` を並び順どおりに返す。
-pub(crate) fn registered_entries(items: &[LauncherItem]) -> impl Iterator<Item = (&str, &str)> {
+/// ピン留めの `(名前, コマンド)` を並び順どおりに返す。
+pub(crate) fn pinned_entries(items: &[LauncherItem]) -> impl Iterator<Item = (&str, &str)> {
     items
         .iter()
-        .skip(BUILTIN_ITEM_COUNT)
         .map(|item| (item.name.as_str(), item.command.as_str()))
 }
 
@@ -264,24 +279,41 @@ mod tests {
     }
 
     #[test]
-    fn registered_entries_skip_builtin_items() {
+    fn pinned_entries_keep_every_item_in_order() {
         let items = [
             item("エクスプローラー", r"C:\Windows\explorer.exe"),
-            item("ターミナル", "wt.exe"),
-            item("メモ帳", "notepad.exe"),
             item("Windows 設定", "ms-settings:"),
             item("Code", r"C:\Apps\Code.exe"),
-            item("Steam", r"C:\Steam\steam.exe"),
         ];
-        let entries: Vec<_> = registered_entries(&items).collect();
+        let entries: Vec<_> = pinned_entries(&items).collect();
         assert_eq!(
             entries,
             [
+                ("エクスプローラー", r"C:\Windows\explorer.exe"),
+                ("Windows 設定", "ms-settings:"),
                 ("Code", r"C:\Apps\Code.exe"),
-                ("Steam", r"C:\Steam\steam.exe")
             ]
         );
-        assert_eq!(registered_entries(&items[..3]).count(), 0);
+    }
+
+    #[test]
+    fn picks_fallback_icons_for_well_known_commands() {
+        let windows = r"C:\Windows";
+        assert_eq!(
+            fallback_icon("ms-settings:", windows),
+            (
+                IconKind::Settings,
+                r"C:\Windows\ImmersiveControlPanel\SystemSettings.exe".to_owned()
+            )
+        );
+        for (command, kind) in [
+            (r"C:\Windows\EXPLORER.EXE", IconKind::Folder),
+            (r"C:\Local\Microsoft\WindowsApps\wt.exe", IconKind::Terminal),
+            (r"C:\Windows\System32\notepad.exe", IconKind::Note),
+            (r"C:\Apps\Code.exe", IconKind::File),
+        ] {
+            assert_eq!(fallback_icon(command, windows), (kind, command.to_owned()));
+        }
     }
 
     #[test]

@@ -48,6 +48,8 @@ pub(crate) trait Platform {
     fn set_foreground(&self, window: isize);
     fn close_window(&self, window: isize);
     fn load_icon(&self, path: &str) -> Option<egui::ColorImage>;
+    /// 実行ファイルの「ファイルの説明」（例: Windows Terminal Preview）。なければ `None`。
+    fn app_name(&self, path: &str) -> Option<String>;
     fn cursor_position(&self) -> Option<egui::Pos2>;
     /// Dock本体のウィンドウの画面座標。
     fn dock_rect(&self) -> Option<egui::Rect>;
@@ -70,19 +72,29 @@ pub(crate) trait Platform {
     fn reserve_edge(&self, side: DockSide, width: Option<f32>) -> Option<egui::Rect>;
 }
 
-/// 実行ファイルのパスごとに取り出したアイコン。取り出せなかったことも覚えておく。
-pub(crate) type IconCache = HashMap<String, Option<egui::ColorImage>>;
+/// 実行ファイルのパスごとに取り出したアイコンと名前。取り出せなかったことも覚えておく。
+pub(crate) type IconCache = HashMap<String, (Option<egui::ColorImage>, Option<String>)>;
 
-/// 実行中のアプリの一覧。アイコンの取り出しは重いため、一度取り出したものは `icons` から使う。
+/// 実行中のアプリの一覧。アイコンと名前の取り出しは重いため、一度取り出したものは `icons` から使う。
+/// 名前は実行ファイルの説明を優先し、なければウィンドウのタイトルから作る。
 pub(crate) fn running_apps(platform: &dyn Platform, icons: &mut IconCache) -> Vec<LauncherItem> {
     group_windows(platform.visible_windows(), platform.foreground_window())
         .into_iter()
-        .map(|group| LauncherItem {
-            icon: icons
+        .map(|group| {
+            let (icon, name) = icons
                 .entry(group.command.clone())
-                .or_insert_with(|| platform.load_icon(&group.command))
-                .clone(),
-            name: group.name,
+                .or_insert_with(|| {
+                    (
+                        platform.load_icon(&group.command),
+                        platform.app_name(&group.command),
+                    )
+                })
+                .clone();
+            (group, icon, name)
+        })
+        .map(|(group, icon, name)| LauncherItem {
+            icon,
+            name: name.unwrap_or(group.name),
             command: group.command,
             fallback_icon: IconKind::File,
             windows: group.windows,
@@ -139,6 +151,9 @@ impl Platform for NullPlatform {
     fn set_foreground(&self, _window: isize) {}
     fn close_window(&self, _window: isize) {}
     fn load_icon(&self, _path: &str) -> Option<egui::ColorImage> {
+        None
+    }
+    fn app_name(&self, _path: &str) -> Option<String> {
         None
     }
     fn cursor_position(&self) -> Option<egui::Pos2> {
@@ -223,7 +238,7 @@ mod tests {
         assert!(apps[0].icon.is_some());
         assert!(apps[0].active);
         assert_eq!(apps[0].windows.len(), 2);
-        assert!(icons[r"C:\Apps\Code.exe"].is_some());
+        assert!(icons[r"C:\Apps\Code.exe"].0.is_some());
     }
 
     #[test]
@@ -233,9 +248,13 @@ mod tests {
             .windows
             .replace(vec![(1, r"C:\Apps\Code.exe".into(), "Code".into())]);
         let cached = egui::ColorImage::filled([1, 1], egui::Color32::BLUE);
-        let mut icons = IconCache::from([(r"C:\Apps\Code.exe".to_owned(), Some(cached.clone()))]);
+        let mut icons = IconCache::from([(
+            r"C:\Apps\Code.exe".to_owned(),
+            (Some(cached.clone()), Some("Visual Studio Code".to_owned())),
+        )]);
         let apps = running_apps(&platform, &mut icons);
         assert_eq!(apps[0].icon, Some(cached));
+        assert_eq!(apps[0].name, "Visual Studio Code");
     }
 
     #[test]

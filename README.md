@@ -16,8 +16,8 @@ Rustと`eframe/egui`で作ったWindows向けのDock型アプリランチャー�
 cargo run
 ```
 
-初期状態ではエクスプローラー、ターミナル、メモ帳、Windows設定が登録されています。
-追加した項目は`%LOCALAPPDATA%\lancher\items.txt`に保存されます。
+初めて起動したときは、エクスプローラーとWindows設定がピン留めされています。どの項目もピン留めを外せます。
+ピン留めは`%LOCALAPPDATA%\windows-side-dock\pinned.txt`に保存されます。
 
 ## 配布用ビルド
 

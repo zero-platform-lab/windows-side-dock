@@ -1,7 +1,7 @@
 use crate::app::{ContextMenuTarget, LauncherApp};
 use crate::config::ProcessTool;
 use crate::layout::{CONTEXT_MENU_WIDTH, WINDOW_PICKER_WIDTH};
-use crate::model::{RunningWindow, BUILTIN_ITEM_COUNT};
+use crate::model::RunningWindow;
 use crate::platform::{activate_windows, close_windows, FileAction};
 use crate::theme::left_aligned_button;
 use crate::ui::normalized_executable_path;
@@ -189,14 +189,9 @@ impl LauncherApp {
                     return true;
                 }
                 ui.separator();
-                if index < BUILTIN_ITEM_COUNT {
-                    ui.add_enabled(false, egui::Button::new("標準アイコン"));
-                    return false;
-                }
                 if self.file_action_buttons(ui, &command) {
                     return true;
                 }
-                ui.separator();
                 let unpin = ui.button("ピン留めを外す").clicked();
                 if unpin {
                     self.unpin(index);
@@ -216,7 +211,6 @@ impl LauncherApp {
                 if self.file_action_buttons(ui, &command) {
                     return true;
                 }
-                ui.separator();
                 let pin = ui.button("ピン留めする").clicked();
                 if pin {
                     self.pin_running(index);
@@ -227,8 +221,12 @@ impl LauncherApp {
     }
 
     /// エクスプローラーの右クリックメニューと同じ操作のボタン。押されたら `true`。
+    /// Windows 設定（`ms-settings:`）のようにファイルでないものには出さない。
     fn file_action_buttons(&mut self, ui: &mut egui::Ui, command: &str) -> bool {
         let path = normalized_executable_path(command);
+        if !std::path::Path::new(&path).is_absolute() {
+            return false;
+        }
         for (label, action) in [
             ("管理者として実行", FileAction::RunAsAdmin),
             ("ファイルの場所を開く", FileAction::OpenLocation),
@@ -239,6 +237,7 @@ impl LauncherApp {
                 return true;
             }
         }
+        ui.separator();
         false
     }
 

@@ -1,8 +1,8 @@
 use crate::config::{ConfigStore, DockSide, ProcessTool};
 use crate::layout::{popup_alignment, window_picker_screen_position};
 use crate::model::{
-    assign_running, item_name_for_path, registered_entries, IconKind, LauncherItem, RunningWindow,
-    BUILTIN_ITEM_COUNT,
+    assign_running, fallback_icon, item_name_for_path, pinned_entries, IconKind, LauncherItem,
+    RunningWindow,
 };
 use crate::platform::{activate_windows, running_apps, IconCache, Platform, TrayAction};
 use crate::shell_menu::sync_process_tool_menu;
@@ -54,10 +54,12 @@ pub(crate) struct LauncherApp {
     pub(crate) monitor_status: Option<String>,
     /// タスクトレイのアイコン。破棄するとトレイから消えるため、アプリの寿命と合わせて保持する。
     pub(crate) tray: Option<Box<dyn std::any::Any>>,
+    /// `%WINDIR%`。ピン留めの代わりのアイコンを探すのに使う。
+    pub(crate) windows_dir: String,
 }
 
 impl LauncherApp {
-    /// `windows_dir` は `%WINDIR%`、`local_app_data` は `%LOCALAPPDATA%`。標準アイコンのパスに使う。
+    /// `windows_dir` は `%WINDIR%`、`local_app_data` は `%LOCALAPPDATA%`。最初に並べる項目のパスに使う。
     pub(crate) fn new(
         platform: Rc<dyn Platform>,
         config: ConfigStore,
@@ -65,39 +67,11 @@ impl LauncherApp {
         local_app_data: &str,
     ) -> Self {
         config.migrate_legacy();
-        let builtin = [
-            (
-                "ファイルエクスプローラー",
-                format!(r"{windows_dir}\explorer.exe"),
-                IconKind::Folder,
-                format!(r"{windows_dir}\explorer.exe"),
-            ),
-            (
-                "ターミナル",
-                format!(r"{local_app_data}\Microsoft\WindowsApps\wt.exe"),
-                IconKind::Terminal,
-                format!(r"{local_app_data}\Microsoft\WindowsApps\wt.exe"),
-            ),
-            (
-                "メモ帳",
-                format!(r"{windows_dir}\System32\notepad.exe"),
-                IconKind::Note,
-                format!(r"{windows_dir}\System32\notepad.exe"),
-            ),
-            (
-                "Windows 設定",
-                "ms-settings:".to_owned(),
-                IconKind::Settings,
-                format!(r"{windows_dir}\ImmersiveControlPanel\SystemSettings.exe"),
-            ),
-        ];
-        let items = builtin
+        let items = initial_entries(&config, windows_dir, local_app_data)
             .iter()
-            .map(|(name, command, icon, source)| {
-                new_item(platform.as_ref(), name, command, *icon, source)
-            })
+            .map(|(name, command)| pinned_item(platform.as_ref(), name, command, windows_dir))
             .collect();
-        let mut app = Self {
+        let app = Self {
             items,
             running: Vec::new(),
             selected: 0,
@@ -119,10 +93,10 @@ impl LauncherApp {
             process_explorer_path: config.load_process_explorer_path(),
             monitor_status: None,
             tray: None,
+            windows_dir: windows_dir.to_owned(),
             platform,
             config,
         };
-        app.load_registered();
         sync_process_tool_menu(
             app.platform.as_ref(),
             app.process_tool,
@@ -139,24 +113,8 @@ impl LauncherApp {
         self.alignment() == egui::RectAlign::LEFT
     }
 
-    fn load_registered(&mut self) {
-        for (name, command) in self.config.load_registered_items() {
-            if !self.items.iter().any(|item| item.command == command) {
-                let item = new_item(
-                    self.platform.as_ref(),
-                    &name,
-                    &command,
-                    IconKind::File,
-                    &command,
-                );
-                self.items.push(item);
-            }
-        }
-    }
-
     pub(crate) fn save_registered(&self) {
-        self.config
-            .save_registered_items(registered_entries(&self.items));
+        self.config.save_pinned_items(pinned_entries(&self.items));
     }
 
     pub(crate) fn add_path(&mut self, path: &Path) {
@@ -164,12 +122,11 @@ impl LauncherApp {
         if self.items.iter().any(|item| item.command == command) {
             return;
         }
-        let item = new_item(
+        let item = pinned_item(
             self.platform.as_ref(),
             item_name_for_path(path),
             command,
-            IconKind::File,
-            command,
+            &self.windows_dir,
         );
         self.items.push(item);
         self.save_registered();
@@ -205,13 +162,13 @@ impl LauncherApp {
         self.refresh_running();
     }
 
-    /// ユーザー登録項目のピン留めを外す。標準アイコンは外せない。
+    /// ピン留めを外す。すべて外して空にもできる。
     pub(crate) fn unpin(&mut self, index: usize) {
-        if index < BUILTIN_ITEM_COUNT || index >= self.items.len() {
+        if index >= self.items.len() {
             return;
         }
         self.items.remove(index);
-        self.selected = self.selected.min(self.items.len() - 1);
+        self.selected = self.selected.min(self.items.len().saturating_sub(1));
         self.save_registered();
         self.refresh_running();
     }
@@ -321,6 +278,65 @@ impl LauncherApp {
             &self.process_explorer_path,
         );
     }
+}
+
+/// 保存してある項目、または初めての起動で並べる項目。
+/// 0.1.21以前は先頭の4つを標準アイコンとして保存していなかったため、引き継ぐときに補う。
+fn initial_entries(
+    config: &ConfigStore,
+    windows_dir: &str,
+    local_app_data: &str,
+) -> Vec<(String, String)> {
+    if let Some(pinned) = config.load_pinned_items() {
+        return pinned;
+    }
+    let explorer = (
+        "ファイルエクスプローラー".to_owned(),
+        format!(r"{windows_dir}\explorer.exe"),
+    );
+    let settings = ("Windows 設定".to_owned(), "ms-settings:".to_owned());
+    let mut entries = match config.load_old_items() {
+        Some(old) => {
+            let mut entries = vec![
+                explorer,
+                (
+                    "ターミナル".to_owned(),
+                    format!(r"{local_app_data}\Microsoft\WindowsApps\wt.exe"),
+                ),
+                (
+                    "メモ帳".to_owned(),
+                    format!(r"{windows_dir}\System32\notepad.exe"),
+                ),
+                settings,
+            ];
+            entries.extend(old);
+            entries
+        }
+        None => vec![explorer, settings],
+    };
+    let mut seen = Vec::new();
+    entries.retain(|(_, command)| {
+        let fresh = !seen.contains(command);
+        seen.push(command.clone());
+        fresh
+    });
+    config.save_pinned_items(
+        entries
+            .iter()
+            .map(|(name, command)| (name.as_str(), command.as_str())),
+    );
+    entries
+}
+
+/// ピン留めの項目。よく使うアプリは代わりのアイコンも専用のものにする。
+pub(crate) fn pinned_item(
+    platform: &dyn Platform,
+    name: &str,
+    command: &str,
+    windows_dir: &str,
+) -> LauncherItem {
+    let (fallback, source) = fallback_icon(command, windows_dir);
+    new_item(platform, name, command, fallback, &source)
 }
 
 pub(crate) fn new_item(

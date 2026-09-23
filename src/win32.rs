@@ -186,6 +186,40 @@ impl Platform for WindowsPlatform {
         load_shell_icon(path)
     }
 
+    fn app_name(&self, path: &str) -> Option<String> {
+        use windows_sys::Win32::Storage::FileSystem::{
+            GetFileVersionInfoSizeW, GetFileVersionInfoW, VerQueryValueW,
+        };
+        let file = wide(path);
+        let size = unsafe { GetFileVersionInfoSizeW(file.as_ptr(), std::ptr::null_mut()) };
+        if size == 0 {
+            return None;
+        }
+        let mut data = vec![0_u8; size as usize];
+        if unsafe { GetFileVersionInfoW(file.as_ptr(), 0, size, data.as_mut_ptr().cast()) } == 0 {
+            return None;
+        }
+        let query = |key: &str| -> Option<(*const u16, u32)> {
+            let key = wide(key);
+            let mut value = std::ptr::null_mut();
+            let mut length = 0_u32;
+            let found = unsafe {
+                VerQueryValueW(data.as_ptr().cast(), key.as_ptr(), &mut value, &mut length)
+            };
+            (found != 0 && length > 0).then_some((value as *const u16, length))
+        };
+        // 最初の言語とコードページの組で「ファイルの説明」を読む。
+        let (translation, _) = query(r"\VarFileInfo\Translation")?;
+        let (language, code_page) = unsafe { (*translation, *translation.add(1)) };
+        let (text, length) = query(&format!(
+            r"\StringFileInfo\{language:04x}{code_page:04x}\FileDescription"
+        ))?;
+        let description = unsafe { std::slice::from_raw_parts(text, length as usize) };
+        let description = String::from_utf16_lossy(description);
+        let description = description.trim_end_matches('\0').trim();
+        (!description.is_empty()).then(|| description.to_owned())
+    }
+
     fn cursor_position(&self) -> Option<egui::Pos2> {
         use windows_sys::Win32::UI::WindowsAndMessaging::GetCursorPos;
         let mut cursor = POINT::default();

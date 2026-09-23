@@ -16,7 +16,10 @@ pub(crate) enum ProcessTool {
 const CONFIG_DIR: &str = "windows-side-dock";
 /// アプリ名変更前（0.1.5以前）の保存先。移行元としてだけ読む。
 const LEGACY_CONFIG_DIR: &str = "lancher";
+/// 0.1.21以前のピン留め。標準アイコン4つを含まない。新しい保存先への引き継ぎにだけ読む。
 const ITEMS_FILE: &str = "items.txt";
+/// 0.1.22以降のピン留め。すべての項目を並び順どおりに持つ。
+const PINNED_FILE: &str = "pinned.txt";
 const PROCESS_TOOL_FILE: &str = "process_tool.txt";
 const PROCESS_EXPLORER_PATH_FILE: &str = "process_explorer_path.txt";
 /// 0.1.16で追加。旧保存先には存在しないため移行対象に含めない。
@@ -72,16 +75,20 @@ impl ConfigStore {
         }
     }
 
-    pub(crate) fn load_registered_items(&self) -> Vec<(String, String)> {
-        self.read(ITEMS_FILE)
-            .map_or_else(Vec::new, |contents| parse_registered_items(&contents))
+    /// ピン留めの `(名前, コマンド)`。まだ保存したことがなければ `None`。
+    pub(crate) fn load_pinned_items(&self) -> Option<Vec<(String, String)>> {
+        self.read(PINNED_FILE)
+            .map(|contents| parse_registered_items(&contents))
     }
 
-    pub(crate) fn save_registered_items<'a>(
-        &self,
-        items: impl Iterator<Item = (&'a str, &'a str)>,
-    ) {
-        self.write(ITEMS_FILE, &format_registered_items(items));
+    pub(crate) fn save_pinned_items<'a>(&self, items: impl Iterator<Item = (&'a str, &'a str)>) {
+        self.write(PINNED_FILE, &format_registered_items(items));
+    }
+
+    /// 0.1.21以前に保存したピン留め（標準アイコンを除く）。なければ `None`。
+    pub(crate) fn load_old_items(&self) -> Option<Vec<(String, String)>> {
+        self.read(ITEMS_FILE)
+            .map(|contents| parse_registered_items(&contents))
     }
 
     pub(crate) fn load_process_tool(&self) -> ProcessTool {
@@ -160,6 +167,15 @@ fn process_tool_value(tool: ProcessTool) -> &'static str {
     }
 }
 
+/// 0.1.21から更新した状態の設定。空の `items.txt` があるため、標準アイコンだった4つを引き継ぐ。
+#[cfg(test)]
+pub(crate) fn upgraded_store(test: &str) -> ConfigStore {
+    let root = temp_root(test);
+    let config = ConfigStore::new(Some(root));
+    config.write(ITEMS_FILE, "");
+    config
+}
+
 /// テスト用の一時フォルダー。テストごとに名前を分け、前回の残りは消してから返す。
 #[cfg(test)]
 pub(crate) fn temp_root(test: &str) -> PathBuf {
@@ -198,7 +214,7 @@ mod tests {
     fn saves_every_setting_under_application_folder() {
         let root = temp_root("store-round-trip");
         let config = store(&root);
-        config.save_registered_items([("Code", r"C:\Code.exe")].into_iter());
+        config.save_pinned_items([("Code", r"C:\Code.exe")].into_iter());
         config.save_process_tool(ProcessTool::ProcessExplorer);
         config.save_process_explorer_path("  E:\\procexp.exe \n");
         config.save_always_on_top(true);
@@ -206,8 +222,8 @@ mod tests {
 
         let reloaded = store(&root);
         assert_eq!(
-            reloaded.load_registered_items(),
-            [("Code".to_owned(), r"C:\Code.exe".to_owned())]
+            reloaded.load_pinned_items(),
+            Some(vec![("Code".to_owned(), r"C:\Code.exe".to_owned())])
         );
         assert_eq!(reloaded.load_process_tool(), ProcessTool::ProcessExplorer);
         assert!(reloaded.load_always_on_top());
@@ -228,7 +244,8 @@ mod tests {
     fn uses_defaults_when_files_are_missing() {
         let root = temp_root("store-defaults");
         let config = store(&root);
-        assert!(config.load_registered_items().is_empty());
+        assert_eq!(config.load_pinned_items(), None);
+        assert_eq!(config.load_old_items(), None);
         assert_eq!(config.load_process_tool(), ProcessTool::TaskManager);
         assert!(!config.load_always_on_top());
         assert_eq!(config.load_dock_side(), DockSide::Right);

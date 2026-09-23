@@ -108,10 +108,10 @@ impl LauncherApp {
             self.add_path(&path);
         }
         let pressed = |key| ctx.input(|input| input.key_pressed(key));
-        if pressed(Key::Escape) {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-        }
         let count = self.items.len();
+        if count == 0 {
+            return;
+        }
         if pressed(Key::ArrowRight) {
             self.selected = (self.selected + 1) % count;
         }

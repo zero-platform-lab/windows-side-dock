@@ -10,8 +10,11 @@ struct Fixture {
     root: PathBuf,
 }
 
+/// 0.1.21から更新した状態（標準アイコンだった4つを引き継ぐ）で始める。
 fn fixture(test: &str, platform: FakePlatform) -> Fixture {
     let root = temp_root(test);
+    std::fs::create_dir_all(root.join("windows-side-dock")).unwrap();
+    std::fs::write(root.join("windows-side-dock").join("items.txt"), "").unwrap();
     let platform = Rc::new(platform);
     let app = LauncherApp::new(
         platform.clone(),
@@ -42,16 +45,45 @@ fn existing_file(root: &Path) -> String {
 }
 
 #[test]
-fn starts_with_builtin_items_and_registered_items_without_duplicates() {
-    let root = temp_root("app-start");
+fn starts_with_explorer_and_settings_on_first_run() {
+    let root = temp_root("app-first-run");
     let config = ConfigStore::new(Some(root.clone()));
-    config.save_registered_items(
-        [
-            ("Code", r"C:\Apps\Code.exe"),
-            ("メモ帳", r"C:\Windows\System32\notepad.exe"),
-        ]
-        .into_iter(),
+    let app = LauncherApp::new(
+        Rc::new(FakePlatform::default()),
+        config,
+        r"C:\Windows",
+        r"C:\Local",
     );
+    let commands: Vec<_> = app.items.iter().map(|item| item.command.as_str()).collect();
+    assert_eq!(commands, [r"C:\Windows\explorer.exe", "ms-settings:"]);
+    assert_eq!(app.items[1].fallback_icon, IconKind::Settings);
+    assert_eq!(app.config.load_pinned_items().unwrap().len(), 2);
+}
+
+#[test]
+fn keeps_saved_pins_even_when_every_pin_was_removed() {
+    let root = temp_root("app-saved-pins");
+    let config = ConfigStore::new(Some(root.clone()));
+    config.save_pinned_items(std::iter::empty());
+    let app = LauncherApp::new(
+        Rc::new(FakePlatform::default()),
+        config,
+        r"C:\Windows",
+        r"C:\Local",
+    );
+    assert!(app.items.is_empty());
+}
+
+#[test]
+fn carries_over_the_former_builtin_icons_and_old_pins_without_duplicates() {
+    let root = temp_root("app-start");
+    std::fs::create_dir_all(root.join("windows-side-dock")).unwrap();
+    std::fs::write(
+        root.join("windows-side-dock").join("items.txt"),
+        "Code|C:\\Apps\\Code.exe\nメモ帳|C:\\Windows\\System32\\notepad.exe",
+    )
+    .unwrap();
+    let config = ConfigStore::new(Some(root.clone()));
     config.save_process_tool(ProcessTool::ProcessExplorer);
     config.save_process_explorer_path(r"E:\procexp.exe");
     let platform = Rc::new(FakePlatform {
@@ -75,6 +107,7 @@ fn starts_with_builtin_items_and_registered_items_without_duplicates() {
         ]
     );
     assert!(app.items.iter().all(|item| item.icon.is_some()));
+    assert_eq!(app.config.load_pinned_items().unwrap().len(), 5);
     assert_eq!(app.process_tool, ProcessTool::ProcessExplorer);
     assert_eq!(
         platform.registry_values.borrow().values().next().unwrap(),
@@ -90,8 +123,8 @@ fn adds_dropped_files_once() {
     assert_eq!(f.app.items.len(), 5);
     assert_eq!(f.app.items[4].name, "Steam");
     assert_eq!(
-        f.app.config.load_registered_items(),
-        [("Steam".to_owned(), r"C:\Games\Steam.lnk".to_owned())]
+        f.app.config.load_pinned_items().unwrap().last(),
+        Some(&("Steam".to_owned(), r"C:\Games\Steam.lnk".to_owned()))
     );
 }
 
@@ -101,7 +134,7 @@ fn ignores_dropped_paths_that_are_not_unicode() {
     let mut f = fixture("app-add-invalid", FakePlatform::default());
     let invalid = std::ffi::OsString::from_wide(&[0xD800]);
     f.app.add_path(Path::new(&invalid));
-    assert_eq!(f.app.items.len(), BUILTIN_ITEM_COUNT);
+    assert_eq!(f.app.items.len(), 4);
 }
 
 #[test]
@@ -140,25 +173,28 @@ fn refreshes_running_apps_and_pins_them() {
     assert_eq!(app.items[4].command, r"C:\Apps\Chrome.exe");
     assert!(app.items[4].windows.len() == 1);
     assert!(app.running.is_empty());
-    assert_eq!(app.config.load_registered_items().len(), 1);
+    assert_eq!(app.config.load_pinned_items().unwrap().len(), 5);
 }
 
 #[test]
-fn unpins_only_registered_items() {
+fn unpins_any_item_down_to_an_empty_dock() {
     let mut f = fixture("app-unpin", FakePlatform::default());
     f.app.add_path(Path::new(r"C:\a.exe"));
-    f.app.add_path(Path::new(r"C:\b.exe"));
     f.app.selected = 5;
-    f.app.unpin(2);
     f.app.unpin(9);
-    assert_eq!(f.app.items.len(), 6);
-    f.app.unpin(5);
     assert_eq!(f.app.items.len(), 5);
-    assert_eq!(f.app.selected, 4);
+    f.app.unpin(0);
+    assert_eq!(f.app.items.len(), 4);
+    assert_eq!(f.app.selected, 3);
     assert_eq!(
-        f.app.config.load_registered_items(),
-        [("a".to_owned(), r"C:\a.exe".to_owned())]
+        f.app.config.load_pinned_items().unwrap().last(),
+        Some(&("a".to_owned(), r"C:\a.exe".to_owned()))
     );
+    while !f.app.items.is_empty() {
+        f.app.unpin(0);
+    }
+    assert_eq!(f.app.selected, 0);
+    assert_eq!(f.app.config.load_pinned_items(), Some(Vec::new()));
 }
 
 #[test]

@@ -51,9 +51,11 @@ MSI生成:
 - アプリのアイコン（`assets/icon.ico`。`scripts/make-icon.py` で生成し、`build.rs` がexeへ埋め込む。トレイはexeのリソース番号1、ウィンドウは `assets/icon-64.rgba` を使う）
 - 設定「Dockを常に手前に表示」（既定はオフ。`always_on_top.txt` に `on`/`off` で保存し、`apply_window_level` が変化時だけウィンドウへ反映）
 - 画面の端の確保（AppBar）。最大化したウィンドウはDockの手前で止まる。時計の下の「≫」、Dockの右クリックメニュー、トレイのクリックでDockを細いつまみへしまうと、確保もつまみの幅だけになる。つまみのクリックで引き出す
-- アイコン（標準アイコン以外のピン留めと実行中）の右クリックに「管理者として実行」「ファイルの場所を開く」「プロパティ」（`Platform::file_action`）
+- アイコン（ファイルを指すピン留めと実行中。`ms-settings:` は対象外）の右クリックに「管理者として実行」「ファイルの場所を開く」「プロパティ」（`Platform::file_action`）
 - ポップアップ（メニュー・ツールチップ・設定画面）はDockの位置から画面の内側へ開く。「ポップアップの方向」設定は0.1.21で廃止
 - タスクトレイのメニューから「右端に表示」「左端に表示」を直接選べる
+- Escキーでは終了しない（0.1.22。以前はDockにフォーカスがあると予告なく終了した）。終了はトレイの「終了」
+- 実行中アプリの名前は実行ファイルの「ファイルの説明」を優先する（`Platform::app_name`）。ストアアプリは説明が表示名と違うことがある（例: Windows Terminal Preview → Windows Terminal Host）
 - ログオン時の自動起動（MSIが `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` の `WindowsSideDock` を登録・削除）
 
 ## 右クリック操作
@@ -69,7 +71,8 @@ MSI生成:
 
 0.1.6から保存先は `%LOCALAPPDATA%\windows-side-dock\`。
 
-- `items.txt`: ユーザー登録項目（`名前|コマンド` を1行ずつ）
+- `pinned.txt`: ピン留め（`名前|コマンド` を1行ずつ、並び順どおり）。0.1.22で導入。標準アイコン（外せない固定項目）は廃止し、初回起動はエクスプローラーとWindows 設定だけを登録する（2026-09-23 ユーザー判断）
+- `items.txt`: 0.1.21以前のピン留め（標準アイコン4つを含まない）。`pinned.txt` がないときだけ読み、4つを先頭に補って `pinned.txt` へ引き継ぐ
 - `settings.txt`: ポップアップ方向
 - `process_tool.txt`: Task Manager／Process Explorer
 - `process_explorer_path.txt`: Process Explorerのパス
@@ -160,7 +163,7 @@ GitHub Releasesを使った自動更新はユーザー判断により対象外�
 - インストール先: `%LOCALAPPDATA%\Programs\Windows Side Dock`
 - Package ID: `ZeroPlatformLab.WindowsSideDock`（変更しないこと）
 - バージョン元: `Cargo.toml`
-- 現在のバージョン: `0.1.21`
+- 現在のバージョン: `0.1.22`
 - `build-installer.ps1` はUTF-8のため、Windows PowerShell 5.1ではなくPowerShell 7（`pwsh`）で実行すること
 - `MajorUpgrade`で旧版を置換し、ダウングレードを拒否
 - 同一バージョンの開発用再インストールを許可
