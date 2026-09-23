@@ -1672,7 +1672,7 @@ fn settings_dialog_position(_ctx: &egui::Context, _direction: PopupDirection) ->
 fn directional_tooltip(response: &egui::Response, text: &str, alignment: egui::RectAlign) {
     if response
         .ctx
-        .input(|input| input.pointer.any_down() || input.pointer.secondary_clicked())
+        .input(|input| input.pointer.any_down() || input.pointer.any_click())
     {
         return;
     }
