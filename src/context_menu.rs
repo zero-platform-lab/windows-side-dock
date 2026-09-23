@@ -24,8 +24,8 @@ fn menu_size(target: ContextMenuTarget, window_count: Option<usize>) -> (f32, f3
     let (single, multiple_base) = match target {
         ContextMenuTarget::Handle => return (CONTEXT_MENU_WIDTH, 156.0),
         ContextMenuTarget::Clock => return (CONTEXT_MENU_WIDTH, 54.0),
-        ContextMenuTarget::Pinned(_) => (230.0, 226.0),
-        ContextMenuTarget::Running(_) => (196.0, 192.0),
+        ContextMenuTarget::Pinned(_) => (256.0, 252.0),
+        ContextMenuTarget::Running(_) => (222.0, 218.0),
     };
     match window_count {
         Some(count) if count > 1 => (
@@ -33,8 +33,21 @@ fn menu_size(target: ContextMenuTarget, window_count: Option<usize>) -> (f32, f3
             (multiple_base + count as f32 * 34.0).min(500.0),
         ),
         Some(1) => (WINDOW_MENU_WIDTH, single),
-        _ => (CONTEXT_MENU_WIDTH, 182.0),
+        _ => (CONTEXT_MENU_WIDTH, 208.0),
     }
+}
+
+/// アイコンのメニューの先頭に、何のアプリのメニューかを示す名前を出す。
+fn menu_title(ui: &mut egui::Ui, name: &str) {
+    ui.add(
+        egui::Label::new(
+            egui::RichText::new(name)
+                .strong()
+                .color(Color32::from_rgb(225, 229, 238)),
+        )
+        .truncate(),
+    );
+    ui.separator();
 }
 
 /// 左へ開くときは、幅が広がった分だけ左へずらしてDockに重ならないようにする。
@@ -175,6 +188,7 @@ impl LauncherApp {
                 };
                 let windows = item.windows.clone();
                 let command = item.command.clone();
+                menu_title(ui, &item.name);
                 let launch_label = if windows.is_empty() {
                     "起動"
                 } else {
@@ -184,7 +198,7 @@ impl LauncherApp {
                     self.launch(index);
                     return true;
                 }
-                if !windows.is_empty() && self.window_menu(ui, &windows, (height - 219.0).max(68.0))
+                if !windows.is_empty() && self.window_menu(ui, &windows, (height - 245.0).max(68.0))
                 {
                     return true;
                 }
@@ -204,7 +218,8 @@ impl LauncherApp {
                 };
                 let windows = item.windows.clone();
                 let command = item.command.clone();
-                if self.window_menu(ui, &windows, (height - 185.0).max(68.0)) {
+                menu_title(ui, &item.name);
+                if self.window_menu(ui, &windows, (height - 211.0).max(68.0)) {
                     return true;
                 }
                 ui.separator();

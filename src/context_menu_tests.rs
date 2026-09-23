@@ -83,11 +83,11 @@ fn sizes_menus_by_target_and_window_count() {
     use ContextMenuTarget::*;
     assert_eq!(menu_size(Handle, None), (210.0, 156.0));
     assert_eq!(menu_size(Clock, None), (210.0, 54.0));
-    assert_eq!(menu_size(Pinned(0), Some(0)), (210.0, 182.0));
-    assert_eq!(menu_size(Pinned(0), Some(1)), (430.0, 230.0));
-    assert_eq!(menu_size(Pinned(0), Some(3)), (430.0, 328.0));
-    assert_eq!(menu_size(Running(0), None), (210.0, 182.0));
-    assert_eq!(menu_size(Running(0), Some(1)), (430.0, 196.0));
+    assert_eq!(menu_size(Pinned(0), Some(0)), (210.0, 208.0));
+    assert_eq!(menu_size(Pinned(0), Some(1)), (430.0, 256.0));
+    assert_eq!(menu_size(Pinned(0), Some(3)), (430.0, 354.0));
+    assert_eq!(menu_size(Running(0), None), (210.0, 208.0));
+    assert_eq!(menu_size(Running(0), Some(1)), (430.0, 222.0));
     assert_eq!(menu_size(Running(0), Some(20)), (430.0, 500.0));
 }
 
@@ -200,6 +200,7 @@ fn pinned_menu_launches_idle_items() {
     );
     harness.run();
     assert!(harness.query_by_label("ウィンドウへ移動").is_none());
+    assert!(harness.query_by_label("ファイルエクスプローラー").is_some());
     assert!(harness.query_by_label("プロパティ").is_some());
     assert!(harness.query_by_label("ピン留めを外す").is_some());
     click(&mut harness, "起動");
