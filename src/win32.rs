@@ -200,11 +200,6 @@ impl Platform for WindowsPlatform {
             .then(|| to_rect(rect))
     }
 
-    fn screen_width(&self) -> f32 {
-        use windows_sys::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CXSCREEN};
-        unsafe { GetSystemMetrics(SM_CXSCREEN) as f32 }
-    }
-
     fn work_area(&self) -> Option<egui::Rect> {
         use windows_sys::Win32::UI::WindowsAndMessaging::{SystemParametersInfoW, SPI_GETWORKAREA};
         let mut area = RECT::default();

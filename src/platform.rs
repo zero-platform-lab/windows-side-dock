@@ -19,6 +19,8 @@ pub(crate) struct LocalTime {
 pub(crate) enum TrayAction {
     /// Dockをしまう・引き出す。
     ToggleCollapsed,
+    /// Dockを指定した画面の端へ移す。
+    MoveTo(DockSide),
     OpenSettings,
     LaunchProcessTool,
     Quit,
@@ -49,7 +51,6 @@ pub(crate) trait Platform {
     fn cursor_position(&self) -> Option<egui::Pos2>;
     /// Dock本体のウィンドウの画面座標。
     fn dock_rect(&self) -> Option<egui::Rect>;
-    fn screen_width(&self) -> f32;
     fn work_area(&self) -> Option<egui::Rect>;
     fn local_time(&self) -> LocalTime;
     fn choose_executable(&self) -> Option<String>;
@@ -145,9 +146,6 @@ impl Platform for NullPlatform {
     }
     fn dock_rect(&self) -> Option<egui::Rect> {
         None
-    }
-    fn screen_width(&self) -> f32 {
-        0.0
     }
     fn work_area(&self) -> Option<egui::Rect> {
         None

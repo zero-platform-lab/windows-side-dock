@@ -1,5 +1,5 @@
 use crate::app::{ContextMenuTarget, LauncherApp};
-use crate::config::{DockSide, PopupDirection, ProcessTool};
+use crate::config::{DockSide, ProcessTool};
 use crate::edge::inner_corners;
 use crate::layout::{
     directional_tooltip, format_date_time, next_repaint, settings_dialog_position, POLL_INTERVAL,
@@ -233,7 +233,7 @@ impl LauncherApp {
     }
 
     fn show_settings_viewport(&mut self, ctx: &egui::Context) {
-        let position = settings_dialog_position(self.platform.as_ref(), self.popup_direction);
+        let position = settings_dialog_position(self.platform.as_ref(), self.dock_side);
         ctx.show_viewport_immediate(
             egui::ViewportId::from_hash_of("launcher-settings"),
             egui::ViewportBuilder::default()
@@ -281,15 +281,6 @@ impl LauncherApp {
         ui.radio_value(&mut side, DockSide::Left, "左端");
         if side != self.dock_side {
             self.set_dock_side(side);
-        }
-        ui.add_space(8.0);
-        ui.label("ポップアップの方向");
-        let mut direction = self.popup_direction;
-        ui.radio_value(&mut direction, PopupDirection::Auto, "自動");
-        ui.radio_value(&mut direction, PopupDirection::Left, "常に左");
-        ui.radio_value(&mut direction, PopupDirection::Right, "常に右");
-        if direction != self.popup_direction {
-            self.set_popup_direction(direction);
         }
         ui.add_space(8.0);
         let mut always_on_top = self.always_on_top;

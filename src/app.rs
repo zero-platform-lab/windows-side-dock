@@ -1,4 +1,4 @@
-use crate::config::{ConfigStore, DockSide, PopupDirection, ProcessTool};
+use crate::config::{ConfigStore, DockSide, ProcessTool};
 use crate::layout::{popup_alignment, window_picker_screen_position};
 use crate::model::{
     assign_running, item_name_for_path, registered_entries, IconKind, LauncherItem, RunningWindow,
@@ -34,7 +34,6 @@ pub(crate) struct LauncherApp {
     pub(crate) running_icons: IconCache,
     pub(crate) show_settings: bool,
     pub(crate) font_size: f32,
-    pub(crate) popup_direction: PopupDirection,
     /// Dockを常に手前に出すか。
     pub(crate) always_on_top: bool,
     /// Dockのウィンドウへ最後に反映した「常に手前」の状態。まだなら `None`。
@@ -107,7 +106,6 @@ impl LauncherApp {
             running_icons: IconCache::new(),
             show_settings: false,
             font_size: 13.0,
-            popup_direction: config.load_popup_direction(),
             always_on_top: config.load_always_on_top(),
             applied_always_on_top: None,
             dock_side: config.load_dock_side(),
@@ -134,7 +132,7 @@ impl LauncherApp {
     }
 
     pub(crate) fn alignment(&self) -> egui::RectAlign {
-        popup_alignment(self.platform.as_ref(), self.popup_direction)
+        popup_alignment(self.dock_side)
     }
 
     pub(crate) fn opens_left(&self) -> bool {
@@ -281,6 +279,10 @@ impl LauncherApp {
         while let Some(action) = self.platform.take_tray_action() {
             match action {
                 TrayAction::ToggleCollapsed => self.set_collapsed(!self.collapsed),
+                TrayAction::MoveTo(side) => {
+                    self.set_dock_side(side);
+                    self.set_collapsed(false);
+                }
                 TrayAction::OpenSettings => {
                     self.set_collapsed(false);
                     self.show_settings = true;
@@ -291,11 +293,6 @@ impl LauncherApp {
                 TrayAction::Quit => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
             }
         }
-    }
-
-    pub(crate) fn set_popup_direction(&mut self, direction: PopupDirection) {
-        self.popup_direction = direction;
-        self.config.save_popup_direction(direction);
     }
 
     pub(crate) fn set_always_on_top(&mut self, enabled: bool) {

@@ -1,12 +1,5 @@
 use std::path::PathBuf;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) enum PopupDirection {
-    Auto,
-    Left,
-    Right,
-}
-
 /// Dockを置く画面の端。
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum DockSide {
@@ -24,19 +17,13 @@ const CONFIG_DIR: &str = "windows-side-dock";
 /// アプリ名変更前（0.1.5以前）の保存先。移行元としてだけ読む。
 const LEGACY_CONFIG_DIR: &str = "lancher";
 const ITEMS_FILE: &str = "items.txt";
-const POPUP_DIRECTION_FILE: &str = "settings.txt";
 const PROCESS_TOOL_FILE: &str = "process_tool.txt";
 const PROCESS_EXPLORER_PATH_FILE: &str = "process_explorer_path.txt";
 /// 0.1.16で追加。旧保存先には存在しないため移行対象に含めない。
 const ALWAYS_ON_TOP_FILE: &str = "always_on_top.txt";
 /// 0.1.18で追加。旧保存先には存在しないため移行対象に含めない。
 const DOCK_SIDE_FILE: &str = "dock_side.txt";
-const CONFIG_FILES: [&str; 4] = [
-    ITEMS_FILE,
-    POPUP_DIRECTION_FILE,
-    PROCESS_TOOL_FILE,
-    PROCESS_EXPLORER_PATH_FILE,
-];
+const CONFIG_FILES: [&str; 3] = [ITEMS_FILE, PROCESS_TOOL_FILE, PROCESS_EXPLORER_PATH_FILE];
 
 /// `%LOCALAPPDATA%\windows-side-dock` 以下の設定ファイル。
 /// 保存先が決まらない（`LOCALAPPDATA` がない）場合は読み込みも保存もしない。
@@ -95,15 +82,6 @@ impl ConfigStore {
         items: impl Iterator<Item = (&'a str, &'a str)>,
     ) {
         self.write(ITEMS_FILE, &format_registered_items(items));
-    }
-
-    pub(crate) fn load_popup_direction(&self) -> PopupDirection {
-        self.read(POPUP_DIRECTION_FILE)
-            .map_or(PopupDirection::Auto, |value| parse_popup_direction(&value))
-    }
-
-    pub(crate) fn save_popup_direction(&self, direction: PopupDirection) {
-        self.write(POPUP_DIRECTION_FILE, popup_direction_value(direction));
     }
 
     pub(crate) fn load_process_tool(&self) -> ProcessTool {
@@ -168,22 +146,6 @@ fn format_registered_items<'a>(items: impl Iterator<Item = (&'a str, &'a str)>) 
         .join("\n")
 }
 
-fn parse_popup_direction(value: &str) -> PopupDirection {
-    match value.trim() {
-        "left" => PopupDirection::Left,
-        "right" => PopupDirection::Right,
-        _ => PopupDirection::Auto,
-    }
-}
-
-fn popup_direction_value(direction: PopupDirection) -> &'static str {
-    match direction {
-        PopupDirection::Auto => "auto",
-        PopupDirection::Left => "left",
-        PopupDirection::Right => "right",
-    }
-}
-
 fn parse_process_tool(value: &str) -> ProcessTool {
     match value.trim() {
         "process_explorer" => ProcessTool::ProcessExplorer,
@@ -216,13 +178,6 @@ mod tests {
     }
 
     #[test]
-    fn parses_popup_direction_with_safe_default() {
-        assert_eq!(parse_popup_direction("left\n"), PopupDirection::Left);
-        assert_eq!(parse_popup_direction("right"), PopupDirection::Right);
-        assert_eq!(parse_popup_direction("unexpected"), PopupDirection::Auto);
-    }
-
-    #[test]
     fn parses_process_tool_with_safe_default() {
         assert_eq!(
             parse_process_tool("process_explorer\n"),
@@ -234,16 +189,6 @@ mod tests {
 
     #[test]
     fn stored_values_round_trip() {
-        for direction in [
-            PopupDirection::Auto,
-            PopupDirection::Left,
-            PopupDirection::Right,
-        ] {
-            assert_eq!(
-                parse_popup_direction(popup_direction_value(direction)),
-                direction
-            );
-        }
         for tool in [ProcessTool::TaskManager, ProcessTool::ProcessExplorer] {
             assert_eq!(parse_process_tool(process_tool_value(tool)), tool);
         }
@@ -254,7 +199,6 @@ mod tests {
         let root = temp_root("store-round-trip");
         let config = store(&root);
         config.save_registered_items([("Code", r"C:\Code.exe")].into_iter());
-        config.save_popup_direction(PopupDirection::Left);
         config.save_process_tool(ProcessTool::ProcessExplorer);
         config.save_process_explorer_path("  E:\\procexp.exe \n");
         config.save_always_on_top(true);
@@ -265,7 +209,6 @@ mod tests {
             reloaded.load_registered_items(),
             [("Code".to_owned(), r"C:\Code.exe".to_owned())]
         );
-        assert_eq!(reloaded.load_popup_direction(), PopupDirection::Left);
         assert_eq!(reloaded.load_process_tool(), ProcessTool::ProcessExplorer);
         assert!(reloaded.load_always_on_top());
         assert_eq!(reloaded.load_dock_side(), DockSide::Left);
@@ -276,7 +219,7 @@ mod tests {
         assert_eq!(reloaded.load_process_explorer_path(), r"E:\procexp.exe");
         assert!(root
             .join("windows-side-dock")
-            .join("settings.txt")
+            .join("dock_side.txt")
             .is_file());
         let _ = std::fs::remove_dir_all(root);
     }
@@ -286,7 +229,6 @@ mod tests {
         let root = temp_root("store-defaults");
         let config = store(&root);
         assert!(config.load_registered_items().is_empty());
-        assert_eq!(config.load_popup_direction(), PopupDirection::Auto);
         assert_eq!(config.load_process_tool(), ProcessTool::TaskManager);
         assert!(!config.load_always_on_top());
         assert_eq!(config.load_dock_side(), DockSide::Right);
@@ -296,9 +238,9 @@ mod tests {
     #[test]
     fn does_nothing_without_local_app_data() {
         let config = ConfigStore::new(None);
-        config.save_popup_direction(PopupDirection::Right);
+        config.save_process_tool(ProcessTool::ProcessExplorer);
         config.migrate_legacy();
-        assert_eq!(config.load_popup_direction(), PopupDirection::Auto);
+        assert_eq!(config.load_process_tool(), ProcessTool::TaskManager);
     }
 
     #[test]
@@ -337,14 +279,18 @@ mod tests {
     fn migration_never_overwrites_new_settings() {
         let root = temp_root("migrate-keep");
         std::fs::create_dir_all(root.join("lancher")).unwrap();
-        std::fs::write(root.join("lancher").join("settings.txt"), "left").unwrap();
+        std::fs::write(
+            root.join("lancher").join("process_tool.txt"),
+            "task_manager",
+        )
+        .unwrap();
         let config = store(&root);
-        config.save_popup_direction(PopupDirection::Right);
+        config.save_process_tool(ProcessTool::ProcessExplorer);
 
         config.migrate_legacy();
         config.migrate_legacy();
 
-        assert_eq!(config.load_popup_direction(), PopupDirection::Right);
+        assert_eq!(config.load_process_tool(), ProcessTool::ProcessExplorer);
         let _ = std::fs::remove_dir_all(root);
     }
 

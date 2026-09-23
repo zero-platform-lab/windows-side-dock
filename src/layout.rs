@@ -1,4 +1,4 @@
-use crate::config::PopupDirection;
+use crate::config::DockSide;
 use crate::platform::{LocalTime, Platform};
 use eframe::egui::{self, Color32};
 use std::time::{Duration, Instant};
@@ -20,37 +20,19 @@ fn beside_x(anchor_left: f32, anchor_right: f32, open_left: bool, width: f32, ga
     }
 }
 
-/// Dockが画面の右半分にあれば、ポップアップは左へ開く。Dockが見つからなければ左へ開く。
-pub(crate) fn popup_should_open_left(platform: &dyn Platform) -> bool {
-    platform
-        .dock_rect()
-        .is_none_or(|dock| dock.center().x > platform.screen_width() / 2.0)
-}
-
-pub(crate) fn popup_alignment(
-    platform: &dyn Platform,
-    direction: PopupDirection,
-) -> egui::RectAlign {
-    let open_left = match direction {
-        PopupDirection::Auto => popup_should_open_left(platform),
-        PopupDirection::Left => true,
-        PopupDirection::Right => false,
-    };
-    if open_left {
-        egui::RectAlign::LEFT
-    } else {
-        egui::RectAlign::RIGHT
+/// ポップアップは画面の内側へ開く。右端のDockなら左、左端のDockなら右。
+pub(crate) fn popup_alignment(side: DockSide) -> egui::RectAlign {
+    match side {
+        DockSide::Right => egui::RectAlign::LEFT,
+        DockSide::Left => egui::RectAlign::RIGHT,
     }
 }
 
-pub(crate) fn settings_dialog_position(
-    platform: &dyn Platform,
-    direction: PopupDirection,
-) -> egui::Pos2 {
+pub(crate) fn settings_dialog_position(platform: &dyn Platform, side: DockSide) -> egui::Pos2 {
     let Some(dock) = platform.dock_rect() else {
         return egui::pos2(100.0, 100.0);
     };
-    let open_left = popup_alignment(platform, direction) == egui::RectAlign::LEFT;
+    let open_left = popup_alignment(side) == egui::RectAlign::LEFT;
     let x = beside_x(dock.left(), dock.right(), open_left, SETTINGS_WIDTH, 12.0);
     egui::pos2(x, dock.top())
 }
@@ -224,47 +206,20 @@ mod tests {
     }
 
     #[test]
-    fn opens_toward_the_wider_side_of_the_screen() {
-        assert!(popup_should_open_left(&dock_at(1854.0)));
-        assert!(!popup_should_open_left(&dock_at(12.0)));
-        let missing = FakePlatform {
-            dock: None,
-            ..FakePlatform::default()
-        };
-        assert!(popup_should_open_left(&missing));
-    }
-
-    #[test]
-    fn honours_fixed_popup_direction() {
-        let right_dock = dock_at(1854.0);
-        let left_dock = dock_at(12.0);
-        assert_eq!(
-            popup_alignment(&right_dock, PopupDirection::Auto),
-            egui::RectAlign::LEFT
-        );
-        assert_eq!(
-            popup_alignment(&left_dock, PopupDirection::Auto),
-            egui::RectAlign::RIGHT
-        );
-        assert_eq!(
-            popup_alignment(&left_dock, PopupDirection::Left),
-            egui::RectAlign::LEFT
-        );
-        assert_eq!(
-            popup_alignment(&right_dock, PopupDirection::Right),
-            egui::RectAlign::RIGHT
-        );
+    fn opens_popups_toward_the_inside_of_the_screen() {
+        assert_eq!(popup_alignment(DockSide::Right), egui::RectAlign::LEFT);
+        assert_eq!(popup_alignment(DockSide::Left), egui::RectAlign::RIGHT);
     }
 
     #[test]
     fn places_settings_dialog_next_to_the_dock() {
         let platform = dock_at(1854.0);
         assert_eq!(
-            settings_dialog_position(&platform, PopupDirection::Auto),
+            settings_dialog_position(&platform, DockSide::Right),
             egui::pos2(1854.0 - SETTINGS_WIDTH - 12.0, 12.0)
         );
         assert_eq!(
-            settings_dialog_position(&platform, PopupDirection::Right),
+            settings_dialog_position(&platform, DockSide::Left),
             egui::pos2(1920.0, 12.0)
         );
         let missing = FakePlatform {
@@ -272,7 +227,7 @@ mod tests {
             ..FakePlatform::default()
         };
         assert_eq!(
-            settings_dialog_position(&missing, PopupDirection::Auto),
+            settings_dialog_position(&missing, DockSide::Right),
             egui::pos2(100.0, 100.0)
         );
     }

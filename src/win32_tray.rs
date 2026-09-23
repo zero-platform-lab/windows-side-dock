@@ -2,6 +2,7 @@
 //! 自動テストとカバレッジ計測の対象外にしている（`main.rs` の `coverage(off)`）。
 //! メニュー操作は `TrayQueue` に積み、`Platform::take_tray_action` 経由でアプリが処理する。
 
+use crate::config::DockSide;
 use crate::platform::TrayAction;
 use eframe::egui;
 use std::collections::VecDeque;
@@ -12,6 +13,8 @@ use tray_icon::{Icon, MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, 
 pub(crate) type TrayQueue = Arc<Mutex<VecDeque<TrayAction>>>;
 
 const TOGGLE_ID: &str = "toggle-dock";
+const RIGHT_ID: &str = "dock-right";
+const LEFT_ID: &str = "dock-left";
 const SETTINGS_ID: &str = "settings";
 const PROCESS_TOOL_ID: &str = "process-tool";
 const QUIT_ID: &str = "quit";
@@ -55,19 +58,25 @@ pub(crate) fn install_tray(ctx: egui::Context, queue: TrayQueue) -> Option<TrayI
     let menu = Menu::new();
     let items = [
         MenuItem::with_id(TOGGLE_ID, "Dockをしまう／引き出す", true, None),
+        MenuItem::with_id(RIGHT_ID, "右端に表示", true, None),
+        MenuItem::with_id(LEFT_ID, "左端に表示", true, None),
         MenuItem::with_id(SETTINGS_ID, "Dock 設定", true, None),
         MenuItem::with_id(PROCESS_TOOL_ID, "システムモニター", true, None),
     ];
     let quit = MenuItem::with_id(QUIT_ID, "終了", true, None);
     let separator = PredefinedMenuItem::separator();
-    menu.append_items(&[&items[0], &items[1], &items[2], &separator, &quit])
-        .ok()?;
+    menu.append_items(&[
+        &items[0], &items[1], &items[2], &items[3], &items[4], &separator, &quit,
+    ])
+    .ok()?;
 
     let menu_queue = queue.clone();
     let menu_ctx = ctx.clone();
     let (click_queue, click_ctx) = (queue, ctx);
     MenuEvent::set_event_handler(Some(move |event: MenuEvent| match event.id().as_ref() {
         TOGGLE_ID => request(&menu_queue, &menu_ctx, TrayAction::ToggleCollapsed),
+        RIGHT_ID => request(&menu_queue, &menu_ctx, TrayAction::MoveTo(DockSide::Right)),
+        LEFT_ID => request(&menu_queue, &menu_ctx, TrayAction::MoveTo(DockSide::Left)),
         SETTINGS_ID => request(&menu_queue, &menu_ctx, TrayAction::OpenSettings),
         PROCESS_TOOL_ID => request(&menu_queue, &menu_ctx, TrayAction::LaunchProcessTool),
         QUIT_ID => request(&menu_queue, &menu_ctx, TrayAction::Quit),

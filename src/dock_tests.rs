@@ -368,13 +368,10 @@ fn keeps_the_dock_on_top_when_the_setting_is_on() {
 }
 
 #[test]
-fn saves_popup_direction_and_process_tool_from_settings() {
+fn saves_process_tool_from_settings() {
     let (mut harness, _platform) = settings("settings-radios");
-    click(&mut harness, "常に右");
     click(&mut harness, "Process Explorer");
     let state = harness.state();
-    assert_eq!(state.popup_direction, PopupDirection::Right);
-    assert_eq!(state.config.load_popup_direction(), PopupDirection::Right);
     assert_eq!(
         state.config.load_process_tool(),
         ProcessTool::ProcessExplorer
@@ -647,6 +644,15 @@ fn toggles_the_dock_from_the_tray_and_expands_it_for_settings() {
     harness.step();
     assert!(!harness.state().collapsed);
     assert!(harness.state().show_settings);
+    harness.state_mut().collapsed = true;
+    platform
+        .tray_actions
+        .borrow_mut()
+        .push_back(TrayAction::MoveTo(DockSide::Left));
+    harness.step();
+    assert!(!harness.state().collapsed);
+    assert_eq!(harness.state().dock_side, DockSide::Left);
+    assert_eq!(harness.state().config.load_dock_side(), DockSide::Left);
 }
 
 #[test]

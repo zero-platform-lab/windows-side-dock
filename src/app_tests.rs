@@ -1,5 +1,6 @@
 use super::*;
 use crate::config::temp_root;
+use crate::config::DockSide;
 use crate::platform::fake::FakePlatform;
 use std::path::PathBuf;
 
@@ -283,13 +284,13 @@ fn asks_for_a_valid_process_explorer_path() {
 fn saves_settings_changes() {
     let mut f = fixture("app-settings", FakePlatform::default());
     f.app.monitor_status = Some("old".into());
-    f.app.set_popup_direction(PopupDirection::Right);
+    f.app.set_dock_side(DockSide::Left);
     f.app.set_process_tool(ProcessTool::ProcessExplorer);
     f.app.set_process_explorer_path(r"E:\p.exe".into());
     assert_eq!(f.app.alignment(), egui::RectAlign::RIGHT);
     assert!(!f.app.opens_left());
     assert_eq!(f.app.monitor_status, None);
-    assert_eq!(f.app.config.load_popup_direction(), PopupDirection::Right);
+    assert_eq!(f.app.config.load_dock_side(), DockSide::Left);
     assert_eq!(
         f.app.config.load_process_tool(),
         ProcessTool::ProcessExplorer

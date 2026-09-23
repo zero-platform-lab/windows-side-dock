@@ -51,6 +51,9 @@ MSI生成:
 - アプリのアイコン（`assets/icon.ico`。`scripts/make-icon.py` で生成し、`build.rs` がexeへ埋め込む。トレイはexeのリソース番号1、ウィンドウは `assets/icon-64.rgba` を使う）
 - 設定「Dockを常に手前に表示」（既定はオフ。`always_on_top.txt` に `on`/`off` で保存し、`apply_window_level` が変化時だけウィンドウへ反映）
 - 画面の端の確保（AppBar）。最大化したウィンドウはDockの手前で止まる。時計の下の「≫」、Dockの右クリックメニュー、トレイのクリックでDockを細いつまみへしまうと、確保もつまみの幅だけになる。つまみのクリックで引き出す
+- アイコン（標準アイコン以外のピン留めと実行中）の右クリックに「管理者として実行」「ファイルの場所を開く」「プロパティ」（`Platform::file_action`）
+- ポップアップ（メニュー・ツールチップ・設定画面）はDockの位置から画面の内側へ開く。「ポップアップの方向」設定は0.1.21で廃止
+- タスクトレイのメニューから「右端に表示」「左端に表示」を直接選べる
 - ログオン時の自動起動（MSIが `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` の `WindowsSideDock` を登録・削除）
 
 ## 右クリック操作
@@ -157,7 +160,7 @@ GitHub Releasesを使った自動更新はユーザー判断により対象外�
 - インストール先: `%LOCALAPPDATA%\Programs\Windows Side Dock`
 - Package ID: `ZeroPlatformLab.WindowsSideDock`（変更しないこと）
 - バージョン元: `Cargo.toml`
-- 現在のバージョン: `0.1.20`
+- 現在のバージョン: `0.1.21`
 - `build-installer.ps1` はUTF-8のため、Windows PowerShell 5.1ではなくPowerShell 7（`pwsh`）で実行すること
 - `MajorUpgrade`で旧版を置換し、ダウングレードを拒否
 - 同一バージョンの開発用再インストールを許可

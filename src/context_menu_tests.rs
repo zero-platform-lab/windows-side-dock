@@ -1,6 +1,6 @@
 use super::*;
 use crate::app::new_item;
-use crate::config::{temp_root, ConfigStore, PopupDirection};
+use crate::config::{temp_root, ConfigStore, DockSide};
 use crate::model::{IconKind, LauncherItem};
 use crate::platform::fake::FakePlatform;
 use egui_kittest::kittest::Queryable;
@@ -343,7 +343,7 @@ fn running_menu_lists_every_window() {
 #[test]
 fn menu_stays_hidden_until_first_frame_is_drawn() {
     let (mut app, _platform) = app("menu-reveal", FakePlatform::default());
-    app.popup_direction = PopupDirection::Right;
+    app.dock_side = DockSide::Left;
     app.context_menu = Some((
         ContextMenuTarget::Pinned(4),
         egui::pos2(0.0, 0.0),

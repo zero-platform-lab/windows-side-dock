@@ -15,7 +15,6 @@ pub(crate) struct FakePlatform {
     pub(crate) icons: bool,
     pub(crate) cursor: Option<egui::Pos2>,
     pub(crate) dock: Option<egui::Rect>,
-    pub(crate) screen_width: f32,
     pub(crate) work_area: Option<egui::Rect>,
     pub(crate) time: LocalTime,
     pub(crate) chosen_file: Option<String>,
@@ -47,7 +46,6 @@ impl Default for FakePlatform {
                 egui::pos2(1854.0, 12.0),
                 egui::pos2(1908.0, 812.0),
             )),
-            screen_width: 1920.0,
             work_area: None,
             time: LocalTime {
                 month: 9,
@@ -118,9 +116,6 @@ impl Platform for FakePlatform {
     }
     fn dock_rect(&self) -> Option<egui::Rect> {
         self.dock
-    }
-    fn screen_width(&self) -> f32 {
-        self.screen_width
     }
     fn work_area(&self) -> Option<egui::Rect> {
         self.work_area
