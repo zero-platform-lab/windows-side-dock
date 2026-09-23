@@ -1,6 +1,7 @@
 use crate::app::{ContextMenuTarget, LauncherApp};
 use crate::config::ProcessTool;
 use crate::layout::{CONTEXT_MENU_WIDTH, WINDOW_PICKER_WIDTH};
+use crate::model::BUILTIN_ITEM_COUNT;
 use crate::platform::{activate_taskbar_item, close_all_windows, open_target};
 use crate::theme::left_aligned_button;
 use crate::ui::{dock_directory, normalized_executable_path};
@@ -301,7 +302,7 @@ impl LauncherApp {
                                 }
                             }
                             ui.separator();
-                            if index >= 4 {
+                            if index >= BUILTIN_ITEM_COUNT {
                                 if ui.button("ピン留めを外す").clicked() {
                                     self.items.remove(index);
                                     self.selected =

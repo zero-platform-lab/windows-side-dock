@@ -3,7 +3,9 @@ use crate::config::{
     save_registered_items, PopupDirection, ProcessTool,
 };
 use crate::layout::{popup_alignment, window_picker_screen_position};
-use crate::model::{same_application, IconKind, LauncherItem, RunningWindow};
+use crate::model::{
+    assign_running, item_name_for_path, registered_entries, IconKind, LauncherItem, RunningWindow,
+};
 use crate::platform::{activate_taskbar_item, open_target, running_apps};
 use crate::shell_menu::sync_process_tool_menu;
 use crate::ui::item;
@@ -109,12 +111,7 @@ impl LauncherApp {
     }
 
     pub(crate) fn save_registered(&self) {
-        save_registered_items(
-            self.items
-                .iter()
-                .skip(4)
-                .map(|item| (item.name.as_str(), item.command.as_str())),
-        );
+        save_registered_items(registered_entries(&self.items));
     }
 
     pub(crate) fn add_path(&mut self, path: &Path) {
@@ -122,12 +119,12 @@ impl LauncherApp {
         if self.items.iter().any(|item| item.command == command) {
             return;
         }
-        let name = path
-            .file_stem()
-            .and_then(|value| value.to_str())
-            .unwrap_or("アプリ");
-        self.items
-            .push(item(name, command, IconKind::File, command));
+        self.items.push(item(
+            item_name_for_path(path),
+            command,
+            IconKind::File,
+            command,
+        ));
         self.save_registered();
     }
 
@@ -148,27 +145,7 @@ impl LauncherApp {
     }
 
     pub(crate) fn refresh_running(&mut self) {
-        let discovered = running_apps();
-        for pinned in &mut self.items {
-            pinned.windows.clear();
-            pinned.active = false;
-            if let Some(running) = discovered
-                .iter()
-                .find(|running| same_application(pinned, running))
-            {
-                pinned.windows = running.windows.clone();
-                pinned.active = running.active;
-            }
-        }
-        self.running = discovered
-            .into_iter()
-            .filter(|running| {
-                !self
-                    .items
-                    .iter()
-                    .any(|pinned| same_application(pinned, running))
-            })
-            .collect();
+        self.running = assign_running(&mut self.items, running_apps());
     }
 
     pub(crate) fn pin_running(&mut self, index: usize) {

@@ -66,6 +66,47 @@ pub(crate) fn friendly_window_name(title: &str, fallback: &str) -> String {
         .to_owned()
 }
 
+/// 先頭に固定で並ぶ標準アイコン（エクスプローラー、ターミナル、メモ帳、Windows 設定）の数。
+/// これより後ろがユーザー登録項目で、保存とピン留め解除の対象になる。
+pub(crate) const BUILTIN_ITEM_COUNT: usize = 4;
+
+/// ユーザー登録項目の `(名前, コマンド)` を並び順どおりに返す。
+pub(crate) fn registered_entries(items: &[LauncherItem]) -> impl Iterator<Item = (&str, &str)> {
+    items
+        .iter()
+        .skip(BUILTIN_ITEM_COUNT)
+        .map(|item| (item.name.as_str(), item.command.as_str()))
+}
+
+/// ドロップされたファイルの表示名。拡張子を除いたファイル名を使う。
+pub(crate) fn item_name_for_path(path: &Path) -> &str {
+    path.file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or("アプリ")
+}
+
+/// 実行中アプリをピン留め項目へ割り当て、どのピン留め項目にも該当しないものを返す。
+pub(crate) fn assign_running(
+    items: &mut [LauncherItem],
+    discovered: Vec<LauncherItem>,
+) -> Vec<LauncherItem> {
+    for pinned in items.iter_mut() {
+        pinned.windows.clear();
+        pinned.active = false;
+        if let Some(running) = discovered
+            .iter()
+            .find(|running| same_application(pinned, running))
+        {
+            pinned.windows = running.windows.clone();
+            pinned.active = running.active;
+        }
+    }
+    discovered
+        .into_iter()
+        .filter(|running| !items.iter().any(|pinned| same_application(pinned, running)))
+        .collect()
+}
+
 pub(crate) struct WindowGroup {
     pub(crate) name: String,
     pub(crate) command: String,
@@ -206,6 +247,78 @@ mod tests {
         );
         assert!(groups[0].active);
         assert!(!groups[1].active);
+    }
+
+    fn running(name: &str, command: &str, handles: &[isize], active: bool) -> LauncherItem {
+        LauncherItem {
+            windows: handles
+                .iter()
+                .map(|&handle| RunningWindow {
+                    handle,
+                    title: name.into(),
+                })
+                .collect(),
+            active,
+            ..item(name, command)
+        }
+    }
+
+    #[test]
+    fn registered_entries_skip_builtin_items() {
+        let items = [
+            item("エクスプローラー", r"C:\Windows\explorer.exe"),
+            item("ターミナル", "wt.exe"),
+            item("メモ帳", "notepad.exe"),
+            item("Windows 設定", "ms-settings:"),
+            item("Code", r"C:\Apps\Code.exe"),
+            item("Steam", r"C:\Steam\steam.exe"),
+        ];
+        let entries: Vec<_> = registered_entries(&items).collect();
+        assert_eq!(
+            entries,
+            [
+                ("Code", r"C:\Apps\Code.exe"),
+                ("Steam", r"C:\Steam\steam.exe")
+            ]
+        );
+        assert_eq!(registered_entries(&items[..3]).count(), 0);
+    }
+
+    #[test]
+    fn names_dropped_file_without_extension() {
+        assert_eq!(
+            item_name_for_path(Path::new(r"C:\Users\me\Desktop\Steam.lnk")),
+            "Steam"
+        );
+        assert_eq!(item_name_for_path(Path::new(r"C:\")), "アプリ");
+    }
+
+    #[test]
+    fn assigns_running_windows_to_pinned_items() {
+        let mut items = [
+            item("Code", r"C:\Apps\Code.exe"),
+            item("Steam", r"C:\Steam\steam.exe"),
+        ];
+        items[1].windows = vec![RunningWindow {
+            handle: 99,
+            title: "stale".into(),
+        }];
+        items[1].active = true;
+        let unpinned = assign_running(
+            &mut items,
+            vec![
+                running("Code", r"c:\apps\code.exe", &[1, 2], true),
+                running("Chrome", r"C:\Chrome\chrome.exe", &[3], false),
+            ],
+        );
+
+        let handles: Vec<_> = items[0].windows.iter().map(|w| w.handle).collect();
+        assert_eq!(handles, [1, 2]);
+        assert!(items[0].active);
+        assert!(items[1].windows.is_empty());
+        assert!(!items[1].active);
+        assert_eq!(unpinned.len(), 1);
+        assert_eq!(unpinned[0].name, "Chrome");
     }
 
     #[test]
