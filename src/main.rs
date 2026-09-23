@@ -40,12 +40,18 @@ impl PopupDirection {
 }
 
 #[derive(Clone)]
+struct RunningWindow {
+    handle: isize,
+    title: String,
+}
+
+#[derive(Clone)]
 struct LauncherItem {
     name: String,
     command: String,
     fallback_icon: IconKind,
     icon: Option<egui::ColorImage>,
-    windows: Vec<isize>,
+    windows: Vec<RunningWindow>,
     active: bool,
 }
 
@@ -60,6 +66,8 @@ struct LauncherApp {
     popup_direction: PopupDirection,
     drag_origin: Option<egui::Pos2>,
     context_menu: Option<(ContextMenuTarget, egui::Pos2, Instant)>,
+    window_picker: Option<(String, Vec<RunningWindow>, egui::Pos2)>,
+    confirm_close_all: bool,
 }
 
 impl LauncherApp {
@@ -102,6 +110,8 @@ impl LauncherApp {
             popup_direction: load_popup_direction(),
             drag_origin: None,
             context_menu: None,
+            window_picker: None,
+            confirm_close_all: false,
         };
         app.load_registered();
         app
@@ -202,11 +212,29 @@ impl LauncherApp {
         self.refresh_running();
     }
 
-    fn activate_running(&self, index: usize) {
+    fn activate_running(&mut self, index: usize, ctx: &egui::Context) {
         let Some(item) = self.running.get(index) else {
             return;
         };
-        activate_taskbar_item(&item.windows);
+        let name = item.name.clone();
+        let windows = item.windows.clone();
+        self.open_or_activate_windows(name, windows, ctx);
+    }
+
+    fn open_or_activate_windows(
+        &mut self,
+        name: String,
+        windows: Vec<RunningWindow>,
+        ctx: &egui::Context,
+    ) {
+        if windows.len() <= 1 {
+            activate_taskbar_item(&windows);
+        } else if let Some(position) = window_picker_screen_position(
+            self.popup_direction.alignment(ctx) == egui::RectAlign::LEFT,
+        ) {
+            self.window_picker = Some((name, windows, position));
+            self.confirm_close_all = false;
+        }
     }
 }
 
@@ -460,10 +488,85 @@ impl App for LauncherApp {
             );
         }
         self.show_context_menu_viewport(ctx);
+        self.show_window_picker_viewport(ctx);
     }
 }
 
 impl LauncherApp {
+    fn show_window_picker_viewport(&mut self, ctx: &egui::Context) {
+        let Some((name, windows, position)) = self.window_picker.clone() else {
+            return;
+        };
+        let height = (windows.len() as f32 * 38.0 + 116.0).min(420.0);
+        let mut close = false;
+        ctx.show_viewport_immediate(
+            egui::ViewportId::from_hash_of("launcher-window-picker"),
+            egui::ViewportBuilder::default()
+                .with_title(format!("{name} のウィンドウ"))
+                .with_inner_size([360.0, height])
+                .with_position(position)
+                .with_resizable(false)
+                .with_taskbar(false)
+                .with_always_on_top()
+                .with_active(true),
+            |picker_ctx, _class| {
+                if picker_ctx.input(|input| {
+                    input.viewport().close_requested() || input.key_pressed(Key::Escape)
+                }) {
+                    close = true;
+                }
+                egui::CentralPanel::default().show(picker_ctx, |ui| {
+                    ui.heading(&name);
+                    ui.label(format!("{}個のウィンドウ", windows.len()));
+                    ui.separator();
+                    egui::ScrollArea::vertical()
+                        .max_height((height - 105.0).max(60.0))
+                        .show(ui, |ui| {
+                            for window in &windows {
+                                if ui
+                                    .add_sized(
+                                        [ui.available_width(), 32.0],
+                                        egui::Button::new(&window.title),
+                                    )
+                                    .clicked()
+                                {
+                                    activate_taskbar_item(std::slice::from_ref(window));
+                                    close = true;
+                                }
+                            }
+                        });
+                    ui.separator();
+                    if self.confirm_close_all {
+                        ui.horizontal(|ui| {
+                            if ui
+                                .button(
+                                    egui::RichText::new("本当にすべて閉じる")
+                                        .color(Color32::from_rgb(255, 120, 120)),
+                                )
+                                .clicked()
+                            {
+                                close_all_windows(&windows);
+                                close = true;
+                            }
+                            if ui.button("キャンセル").clicked() {
+                                self.confirm_close_all = false;
+                            }
+                        });
+                    } else if ui.button("すべて閉じる").clicked() {
+                        self.confirm_close_all = true;
+                    }
+                });
+                if close {
+                    picker_ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                }
+            },
+        );
+        if close {
+            self.window_picker = None;
+            self.confirm_close_all = false;
+        }
+    }
+
     fn show_context_menu_viewport(&mut self, ctx: &egui::Context) {
         let Some((target, position, opened_at)) = self.context_menu else {
             return;
@@ -538,7 +641,9 @@ impl LauncherApp {
                                 close = true;
                             }
                             if is_running && ui.button("ウィンドウへ移動").clicked() {
-                                activate_taskbar_item(&self.items[index].windows);
+                                let name = self.items[index].name.clone();
+                                let windows = self.items[index].windows.clone();
+                                self.open_or_activate_windows(name, windows, menu_ctx);
                                 close = true;
                             }
                             ui.separator();
@@ -561,7 +666,7 @@ impl LauncherApp {
                                 return;
                             }
                             if ui.button("ウィンドウへ移動").clicked() {
-                                self.activate_running(index);
+                                self.activate_running(index, menu_ctx);
                                 close = true;
                             }
                             ui.separator();
@@ -701,7 +806,7 @@ impl LauncherApp {
             }
         }
         if response.clicked() {
-            self.activate_running(index);
+            self.activate_running(index, ctx);
         }
     }
 }
@@ -758,7 +863,8 @@ fn running_apps() -> Vec<LauncherItem> {
         PROCESS_QUERY_LIMITED_INFORMATION,
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        EnumWindows, GetWindowTextLengthW, GetWindowThreadProcessId, IsWindowVisible,
+        EnumWindows, GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId,
+        IsWindowVisible,
     };
 
     unsafe extern "system" fn enumerate(hwnd: HWND, parameter: LPARAM) -> BOOL {
@@ -782,24 +888,35 @@ fn running_apps() -> Vec<LauncherItem> {
             return 1;
         }
         let command = String::from_utf16_lossy(&path[..length as usize]);
-        let output = &mut *(parameter as *mut Vec<(isize, String)>);
-        output.push((hwnd as isize, command));
+        let title_length = GetWindowTextLengthW(hwnd);
+        let mut title_buffer = vec![0_u16; title_length.max(0) as usize + 1];
+        let copied = GetWindowTextW(hwnd, title_buffer.as_mut_ptr(), title_buffer.len() as i32);
+        let title = if copied > 0 {
+            String::from_utf16_lossy(&title_buffer[..copied as usize])
+        } else {
+            command.clone()
+        };
+        let output = &mut *(parameter as *mut Vec<(isize, String, String)>);
+        output.push((hwnd as isize, command, title));
         1
     }
 
-    let mut windows = Vec::<(isize, String)>::new();
+    let mut windows = Vec::<(isize, String, String)>::new();
     unsafe {
         EnumWindows(Some(enumerate), &mut windows as *mut _ as LPARAM);
     }
     let foreground =
         unsafe { windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow() as isize };
     let mut items: Vec<LauncherItem> = Vec::new();
-    for (window, command) in windows {
+    for (window, command, title) in windows {
         if let Some(existing) = items
             .iter_mut()
             .find(|item| item.command.eq_ignore_ascii_case(&command))
         {
-            existing.windows.push(window);
+            existing.windows.push(RunningWindow {
+                handle: window,
+                title,
+            });
             existing.active |= window == foreground;
         } else {
             let name = Path::new(&command)
@@ -812,7 +929,10 @@ fn running_apps() -> Vec<LauncherItem> {
                 icon: load_shell_icon(&command),
                 command,
                 fallback_icon: IconKind::File,
-                windows: vec![window],
+                windows: vec![RunningWindow {
+                    handle: window,
+                    title,
+                }],
                 active: window == foreground,
             });
         }
@@ -826,14 +946,14 @@ fn running_apps() -> Vec<LauncherItem> {
 }
 
 #[cfg(windows)]
-fn activate_taskbar_item(handles: &[isize]) {
+fn activate_taskbar_item(windows: &[RunningWindow]) {
     use windows_sys::Win32::Foundation::HWND;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         GetForegroundWindow, SetForegroundWindow, ShowWindow, SW_MINIMIZE, SW_RESTORE,
     };
-    if let Some(&handle) = handles.first() {
+    if let Some(item) = windows.first() {
         unsafe {
-            let window = handle as HWND;
+            let window = item.handle as HWND;
             if GetForegroundWindow() == window {
                 ShowWindow(window, SW_MINIMIZE);
             } else {
@@ -845,7 +965,21 @@ fn activate_taskbar_item(handles: &[isize]) {
 }
 
 #[cfg(not(windows))]
-fn activate_taskbar_item(_handles: &[isize]) {}
+fn activate_taskbar_item(_windows: &[RunningWindow]) {}
+
+#[cfg(windows)]
+fn close_all_windows(windows: &[RunningWindow]) {
+    use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_CLOSE};
+    for item in windows {
+        unsafe {
+            PostMessageW(item.handle as HWND, WM_CLOSE, 0, 0);
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn close_all_windows(_windows: &[RunningWindow]) {}
 
 #[cfg(windows)]
 fn load_shell_icon(path: &str) -> Option<egui::ColorImage> {
@@ -1229,8 +1363,29 @@ fn context_menu_screen_position(open_left: bool) -> Option<egui::Pos2> {
     Some(egui::pos2(x, cursor.y as f32))
 }
 
+#[cfg(windows)]
+fn window_picker_screen_position(open_left: bool) -> Option<egui::Pos2> {
+    use windows_sys::Win32::Foundation::POINT;
+    use windows_sys::Win32::UI::WindowsAndMessaging::GetCursorPos;
+    let mut cursor = POINT::default();
+    if unsafe { GetCursorPos(&mut cursor) } == 0 {
+        return None;
+    }
+    let x = if open_left {
+        cursor.x as f32 - 368.0
+    } else {
+        cursor.x as f32 + 8.0
+    };
+    Some(egui::pos2(x, cursor.y as f32))
+}
+
 #[cfg(not(windows))]
 fn context_menu_screen_position(_open_left: bool) -> Option<egui::Pos2> {
+    Some(egui::pos2(100.0, 100.0))
+}
+
+#[cfg(not(windows))]
+fn window_picker_screen_position(_open_left: bool) -> Option<egui::Pos2> {
     Some(egui::pos2(100.0, 100.0))
 }
 
