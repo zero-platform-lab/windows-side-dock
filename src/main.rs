@@ -678,24 +678,41 @@ impl LauncherApp {
             ContextMenuTarget::Handle => 54.0,
             ContextMenuTarget::Clock => 54.0,
             ContextMenuTarget::Pinned(index) => {
-                if self
-                    .items
-                    .get(index)
-                    .is_some_and(|item| !item.windows.is_empty())
-                {
-                    136.0
-                } else {
-                    102.0
+                match self.items.get(index).map(|item| item.windows.len()) {
+                    Some(count) if count > 1 => (112.0 + count as f32 * 34.0).min(420.0),
+                    Some(1) => 136.0,
+                    _ => 102.0,
                 }
             }
-            ContextMenuTarget::Running(_) => 102.0,
+            ContextMenuTarget::Running(index) => {
+                match self.running.get(index).map(|item| item.windows.len()) {
+                    Some(count) if count > 1 => (78.0 + count as f32 * 34.0).min(420.0),
+                    _ => 102.0,
+                }
+            }
         };
+        let window_count = match target {
+            ContextMenuTarget::Pinned(index) => {
+                self.items.get(index).map_or(0, |item| item.windows.len())
+            }
+            ContextMenuTarget::Running(index) => {
+                self.running.get(index).map_or(0, |item| item.windows.len())
+            }
+            _ => 0,
+        };
+        let width = if window_count > 1 { 430.0 } else { 210.0 };
+        let position =
+            if width > 210.0 && self.popup_direction.alignment(ctx) == egui::RectAlign::LEFT {
+                egui::pos2(position.x - (width - 210.0), position.y)
+            } else {
+                position
+            };
         let mut close = false;
         ctx.show_viewport_immediate(
             egui::ViewportId::from_hash_of("launcher-context-menu"),
             egui::ViewportBuilder::default()
                 .with_title("Launcher menu")
-                .with_inner_size([210.0, height])
+                .with_inner_size([width, height])
                 .with_position(position)
                 .with_decorations(false)
                 .with_resizable(false)
@@ -767,11 +784,35 @@ impl LauncherApp {
                                 self.launch(index);
                                 close = true;
                             }
-                            if is_running && ui.button("ウィンドウへ移動").clicked() {
-                                let name = self.items[index].name.clone();
+                            if is_running {
                                 let windows = self.items[index].windows.clone();
-                                self.open_or_activate_windows(name, windows, menu_ctx);
-                                close = true;
+                                if windows.len() == 1 {
+                                    if ui.button("ウィンドウへ移動").clicked() {
+                                        activate_taskbar_item(&windows);
+                                        close = true;
+                                    }
+                                } else {
+                                    ui.label("ウィンドウへ移動");
+                                    egui::ScrollArea::vertical()
+                                        .max_height((height - 105.0).max(68.0))
+                                        .show(ui, |ui| {
+                                            for window in &windows {
+                                                if ui
+                                                    .add_sized(
+                                                        [ui.available_width(), 30.0],
+                                                        egui::Button::new(&window.title),
+                                                    )
+                                                    .on_hover_text(&window.title)
+                                                    .clicked()
+                                                {
+                                                    activate_taskbar_item(std::slice::from_ref(
+                                                        window,
+                                                    ));
+                                                    close = true;
+                                                }
+                                            }
+                                        });
+                                }
                             }
                             ui.separator();
                             if index >= 4 {
@@ -792,9 +833,31 @@ impl LauncherApp {
                                 close = true;
                                 return;
                             }
-                            if ui.button("ウィンドウへ移動").clicked() {
-                                self.activate_running(index, menu_ctx);
-                                close = true;
+                            let windows = self.running[index].windows.clone();
+                            if windows.len() == 1 {
+                                if ui.button("ウィンドウへ移動").clicked() {
+                                    activate_taskbar_item(&windows);
+                                    close = true;
+                                }
+                            } else {
+                                ui.label("ウィンドウへ移動");
+                                egui::ScrollArea::vertical()
+                                    .max_height((height - 71.0).max(68.0))
+                                    .show(ui, |ui| {
+                                        for window in &windows {
+                                            if ui
+                                                .add_sized(
+                                                    [ui.available_width(), 30.0],
+                                                    egui::Button::new(&window.title),
+                                                )
+                                                .on_hover_text(&window.title)
+                                                .clicked()
+                                            {
+                                                activate_taskbar_item(std::slice::from_ref(window));
+                                                close = true;
+                                            }
+                                        }
+                                    });
                             }
                             ui.separator();
                             if ui.button("ピン留めする").clicked() {
