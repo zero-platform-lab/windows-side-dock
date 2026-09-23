@@ -3,7 +3,8 @@
   Windows 11 の右クリックメニューにシェル拡張（shell-menu クレートのDLL）を登録するスパースパッケージ。
   パッケージにはこのマニフェストとロゴだけを入れ、DLLとexeはMSIのインストール先（外部の場所）に置く。
   Version は scripts/build-sparse-package.ps1 が Cargo.toml の版から埋める。
-  Publisher は署名証明書のサブジェクトと完全に一致させること（zero-platform-lab/code-signing）。
+  Publisher は、Windowsが署名証明書から読み取るサブジェクト（.NET の X509Certificate2.Subject と同じ文字列）と
+  並び順まで完全に一致させること。違うと署名が 0x8007000B で失敗する。手順書の表記（CN=..., O=...）とは逆順。
 -->
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
@@ -17,7 +18,7 @@
 
   <Identity
     Name="ZeroPlatformLab.WindowsSideDock.ShellMenu"
-    Publisher="CN=Zero Platform Lab, O=Zero Platform Lab"
+    Publisher="O=Zero Platform Lab, CN=Zero Platform Lab"
     Version="$(Version)"
     ProcessorArchitecture="x64" />
 
