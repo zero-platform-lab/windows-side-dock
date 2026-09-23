@@ -509,6 +509,13 @@ impl App for LauncherApp {
                                 save_process_explorer_path(&self.process_explorer_path);
                                 self.monitor_status = None;
                             }
+                            if ui.button("エクスプローラーから選択…").clicked() {
+                                if let Some(path) = choose_process_explorer_file() {
+                                    self.process_explorer_path = path;
+                                    save_process_explorer_path(&self.process_explorer_path);
+                                    self.monitor_status = None;
+                                }
+                            }
                             let normalized =
                                 normalized_executable_path(&self.process_explorer_path);
                             if normalized.is_empty() {
@@ -1407,6 +1414,47 @@ fn save_process_explorer_path(value: &str) {
         let _ = std::fs::create_dir_all(parent);
     }
     let _ = std::fs::write(path, value.trim());
+}
+
+#[cfg(windows)]
+fn choose_process_explorer_file() -> Option<String> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::UI::Controls::Dialogs::{
+        GetOpenFileNameW, OFN_FILEMUSTEXIST, OFN_PATHMUSTEXIST, OPENFILENAMEW,
+    };
+    use windows_sys::Win32::UI::WindowsAndMessaging::FindWindowW;
+
+    let owner_title: Vec<u16> = std::ffi::OsStr::new("ランチャー設定")
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
+    let dialog_title: Vec<u16> = std::ffi::OsStr::new("Process Explorerを選択")
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
+    let filter: Vec<u16> = "実行ファイル (*.exe)\0*.exe\0すべてのファイル\0*.*\0\0"
+        .encode_utf16()
+        .collect();
+    let mut file_buffer = vec![0_u16; 32768];
+    let mut options = OPENFILENAMEW::default();
+    options.lStructSize = std::mem::size_of::<OPENFILENAMEW>() as u32;
+    options.hwndOwner = unsafe { FindWindowW(std::ptr::null(), owner_title.as_ptr()) };
+    options.lpstrFilter = filter.as_ptr();
+    options.lpstrFile = file_buffer.as_mut_ptr();
+    options.nMaxFile = file_buffer.len() as u32;
+    options.lpstrTitle = dialog_title.as_ptr();
+    options.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST;
+
+    if unsafe { GetOpenFileNameW(&mut options) } == 0 {
+        return None;
+    }
+    let length = file_buffer.iter().position(|&value| value == 0)?;
+    Some(String::from_utf16_lossy(&file_buffer[..length]))
+}
+
+#[cfg(not(windows))]
+fn choose_process_explorer_file() -> Option<String> {
+    None
 }
 
 #[cfg(windows)]
