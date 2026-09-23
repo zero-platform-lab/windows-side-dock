@@ -8,6 +8,7 @@ use crate::layout::{
     settings_dialog_position, SETTINGS_WIDTH,
 };
 use crate::model::IconKind;
+use crate::shell_menu::sync_process_tool_menu;
 use crate::theme::draw_icon_colored;
 use crate::ui::normalized_executable_path;
 use eframe::egui::{self, Color32, Key};
@@ -288,6 +289,7 @@ impl App for LauncherApp {
                             .changed();
                         if tool_changed {
                             save_process_tool(self.process_tool);
+                            sync_process_tool_menu(self.process_tool, &self.process_explorer_path);
                         }
                         if self.process_tool == ProcessTool::ProcessExplorer {
                             ui.label("Process Explorerのパス");
@@ -297,12 +299,20 @@ impl App for LauncherApp {
                             );
                             if path_response.changed() {
                                 save_process_explorer_path(&self.process_explorer_path);
+                                sync_process_tool_menu(
+                                    self.process_tool,
+                                    &self.process_explorer_path,
+                                );
                                 self.monitor_status = None;
                             }
                             if ui.button("エクスプローラーから選択…").clicked() {
                                 if let Some(path) = choose_process_explorer_file() {
                                     self.process_explorer_path = path;
                                     save_process_explorer_path(&self.process_explorer_path);
+                                    sync_process_tool_menu(
+                                        self.process_tool,
+                                        &self.process_explorer_path,
+                                    );
                                     self.monitor_status = None;
                                 }
                             }

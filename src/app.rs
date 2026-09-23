@@ -5,6 +5,7 @@ use crate::config::{
 use crate::layout::{popup_alignment, window_picker_screen_position};
 use crate::model::{same_application, IconKind, LauncherItem, RunningWindow};
 use crate::platform::{activate_taskbar_item, open_target, running_apps};
+use crate::shell_menu::sync_process_tool_menu;
 use crate::ui::item;
 use eframe::egui;
 use std::collections::HashMap;
@@ -94,6 +95,7 @@ impl LauncherApp {
             monitor_status: None,
         };
         app.load_registered();
+        sync_process_tool_menu(app.process_tool, &app.process_explorer_path);
         app
     }
 

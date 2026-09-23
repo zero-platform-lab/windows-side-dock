@@ -27,7 +27,7 @@
       </Directory>
     </StandardDirectory>
 
-    <Component Id="DesktopBackgroundMenu" Directory="INSTALLFOLDER" Guid="F1139438-51EB-4BF5-80C7-A33BBE5EDA81">
+    <Component Id="DesktopBackgroundMenu" Directory="INSTALLFOLDER" Guid="35400EB0-983E-46AD-8E4E-2E7ED029CB8F">
       <RegistryValue
         Root="HKCU"
         Key="Software\Classes\DesktopBackground\Shell\WindowsSideDock"
@@ -39,11 +39,11 @@
       <RegistryValue Root="HKCU" Key="Software\Classes\DesktopBackground\Shell\WindowsSideDock" Name="SubCommands" Type="string" Value="" />
       <RegistryValue Root="HKCU" Key="Software\Classes\DesktopBackground\Shell\WindowsSideDock\shell\01Folder" Name="MUIVerb" Type="string" Value="Windows Side Dockの場所を開く" />
       <RegistryValue Root="HKCU" Key="Software\Classes\DesktopBackground\Shell\WindowsSideDock\shell\01Folder\command" Type="string" Value="explorer.exe &quot;[INSTALLFOLDER]&quot;" />
-      <RegistryValue Root="HKCU" Key="Software\Classes\DesktopBackground\Shell\WindowsSideDock\shell\02TaskManager" Name="MUIVerb" Type="string" Value="タスク マネージャー" />
-      <RegistryValue Root="HKCU" Key="Software\Classes\DesktopBackground\Shell\WindowsSideDock\shell\02TaskManager\command" Type="string" Value="taskmgr.exe" />
+      <RegistryValue Root="HKCU" Key="Software\Classes\DesktopBackground\Shell\WindowsSideDock\shell\02ProcessTool" Name="MUIVerb" Type="string" Value="タスク マネージャー" />
+      <RegistryValue Root="HKCU" Key="Software\Classes\DesktopBackground\Shell\WindowsSideDock\shell\02ProcessTool\command" Type="string" Value="taskmgr.exe" />
     </Component>
 
-    <Component Id="DirectoryBackgroundMenu" Directory="INSTALLFOLDER" Guid="FFEE9A83-28A9-49AE-81A8-6B665D2E9F34">
+    <Component Id="DirectoryBackgroundMenu" Directory="INSTALLFOLDER" Guid="B5E3A55F-C74C-42FF-B654-44CE70E04B93">
       <RegistryValue
         Root="HKCU"
         Key="Software\Classes\Directory\Background\Shell\WindowsSideDock"
@@ -55,8 +55,8 @@
       <RegistryValue Root="HKCU" Key="Software\Classes\Directory\Background\Shell\WindowsSideDock" Name="SubCommands" Type="string" Value="" />
       <RegistryValue Root="HKCU" Key="Software\Classes\Directory\Background\Shell\WindowsSideDock\shell\01Folder" Name="MUIVerb" Type="string" Value="Windows Side Dockの場所を開く" />
       <RegistryValue Root="HKCU" Key="Software\Classes\Directory\Background\Shell\WindowsSideDock\shell\01Folder\command" Type="string" Value="explorer.exe &quot;[INSTALLFOLDER]&quot;" />
-      <RegistryValue Root="HKCU" Key="Software\Classes\Directory\Background\Shell\WindowsSideDock\shell\02TaskManager" Name="MUIVerb" Type="string" Value="タスク マネージャー" />
-      <RegistryValue Root="HKCU" Key="Software\Classes\Directory\Background\Shell\WindowsSideDock\shell\02TaskManager\command" Type="string" Value="taskmgr.exe" />
+      <RegistryValue Root="HKCU" Key="Software\Classes\Directory\Background\Shell\WindowsSideDock\shell\02ProcessTool" Name="MUIVerb" Type="string" Value="タスク マネージャー" />
+      <RegistryValue Root="HKCU" Key="Software\Classes\Directory\Background\Shell\WindowsSideDock\shell\02ProcessTool\command" Type="string" Value="taskmgr.exe" />
     </Component>
 
     <Feature Id="MainFeature" Title="Windows Side Dock" Level="1">

@@ -7,6 +7,7 @@ mod dock;
 mod layout;
 mod model;
 mod platform;
+mod shell_menu;
 mod theme;
 mod ui;
 
