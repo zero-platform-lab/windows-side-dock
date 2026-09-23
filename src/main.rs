@@ -703,7 +703,7 @@ impl LauncherApp {
             return;
         };
         let height = match target {
-            ContextMenuTarget::Handle => 54.0,
+            ContextMenuTarget::Handle => 132.0,
             ContextMenuTarget::Clock => 54.0,
             ContextMenuTarget::Pinned(index) => {
                 match self.items.get(index).map(|item| item.windows.len()) {
@@ -772,6 +772,26 @@ impl LauncherApp {
                     )
                     .show(menu_ctx, |ui| match target {
                         ContextMenuTarget::Handle => {
+                            if ui.button("Windows Side Dockの場所を開く").clicked() {
+                                if let Some(directory) = dock_directory() {
+                                    let _ = open_target(&directory.to_string_lossy());
+                                }
+                                close = true;
+                            }
+                            let tool_label = match self.process_tool {
+                                ProcessTool::TaskManager => "タスク マネージャー",
+                                ProcessTool::ProcessExplorer => "Process Explorer",
+                            };
+                            let tool_ready = self.process_tool == ProcessTool::TaskManager
+                                || Path::new(self.process_explorer_path.trim()).is_file();
+                            if ui
+                                .add_enabled(tool_ready, egui::Button::new(tool_label))
+                                .clicked()
+                            {
+                                self.launch_process_tool();
+                                close = true;
+                            }
+                            ui.separator();
                             if ui.button("Dock 設定").clicked() {
                                 self.show_settings = true;
                                 menu_ctx.request_repaint();
@@ -1077,6 +1097,12 @@ fn normalized_executable_path(value: &str) -> String {
         .trim()
         .trim_matches(|character| character == '"' || character == '\'')
         .to_owned()
+}
+
+fn dock_directory() -> Option<PathBuf> {
+    std::env::current_exe()
+        .ok()
+        .and_then(|path| path.parent().map(Path::to_path_buf))
 }
 
 fn normalized_name(value: &str) -> String {
