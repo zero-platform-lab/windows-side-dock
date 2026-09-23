@@ -26,3 +26,15 @@ cargo build --release
 ```
 
 実行ファイルは`target\release\windows-side-dock.exe`に作成されます。
+
+## MSIインストーラー
+
+WiX Toolset 6がインストールされたWindows環境で次を実行します。
+
+```powershell
+.\scripts\build-installer.ps1
+```
+
+`dist\windows-side-dock-<version>-x64.msi`が生成されます。バージョンは`Cargo.toml`から取得します。新しいバージョンのMSIは既存版を置き換え、`%LOCALAPPDATA%\lancher`のユーザー設定を保持します。
+
+リリースごとに、Windows Installerが比較する先頭3桁のバージョンを必ず増やしてください（例: `0.1.1` → `0.1.2`）。

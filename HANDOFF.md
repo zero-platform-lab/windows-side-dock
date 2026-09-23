@@ -19,6 +19,14 @@ cargo build --release
 Start-Process .\target\release\windows-side-dock.exe
 ```
 
+MSI生成:
+
+```powershell
+.\scripts\build-installer.ps1
+```
+
+生成先は`dist\windows-side-dock-<version>-x64.msi`。WiX Toolset 6を使用する。
+
 リリースビルドでは `windows_subsystem = "windows"` が有効になるため、PowerShell／コンソール画面は表示されない。実行中のexeをビルドし直す場合は、先に同じパスのプロセスを終了する必要がある。
 
 ## 現在の主な機能
@@ -117,6 +125,22 @@ Windows 11では「その他のオプションを確認」側に表示される�
 3. Windows背景メニューの登録／解除をアプリ設定へ統合
 4. Process Explorer切り替え時のWindows背景メニュー自動更新
 5. 設定保存先を `windows-side-dock` へ安全に移行
+
+## インストールとアップグレード
+
+- MSI定義: `installer\Package.wxs`
+- ビルドスクリプト: `scripts\build-installer.ps1`
+- インストール範囲: ユーザー単位
+- インストール先: `%LOCALAPPDATA%\Programs\Windows Side Dock`
+- Package ID: `ZeroPlatformLab.WindowsSideDock`（変更しないこと）
+- バージョン元: `Cargo.toml`
+- 現在のバージョン: `0.1.1`
+- `MajorUpgrade`で旧版を置換し、ダウングレードを拒否
+- 同一バージョンの開発用再インストールを許可
+- ユーザー設定フォルダーはMSI管理対象外なのでアップグレード／アンインストールで保持
+- デスクトップとフォルダー背景の右クリックメニューはMSIが登録・解除
+
+0.1.0をインストール後に0.1.1を適用する実機アップグレードテスト済み。両方とも`msiexec`終了コード0。
 
 ## Gitと作業ツリー
 

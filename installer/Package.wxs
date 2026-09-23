@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package
+    Id="ZeroPlatformLab.WindowsSideDock"
+    Name="Windows Side Dock"
+    Manufacturer="zero-platform-lab"
+    Version="$(Version)"
+    Scope="perUser">
+
+    <MajorUpgrade
+      AllowSameVersionUpgrades="yes"
+      DowngradeErrorMessage="新しいバージョンの Windows Side Dock が既にインストールされています。" />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <StandardDirectory Id="PerUserProgramFilesFolder">
+      <Directory Id="INSTALLFOLDER" Name="Windows Side Dock">
+        <Component Id="ApplicationFiles" Guid="5B32799D-28DD-4E7F-9FE3-92390EB63443">
+          <File Id="WindowsSideDockExe" Source="$(SourceDir)\windows-side-dock.exe" KeyPath="yes">
+            <Shortcut
+              Id="StartMenuShortcut"
+              Directory="ProgramMenuFolder"
+              Name="Windows Side Dock"
+              WorkingDirectory="INSTALLFOLDER"
+              Advertise="no" />
+          </File>
+        </Component>
+      </Directory>
+    </StandardDirectory>
+
+    <Component Id="DesktopBackgroundMenu" Directory="INSTALLFOLDER" Guid="F1139438-51EB-4BF5-80C7-A33BBE5EDA81">
+      <RegistryValue
+        Root="HKCU"
+        Key="Software\Classes\DesktopBackground\Shell\WindowsSideDock"
+        Name="MUIVerb"
+        Type="string"
+        Value="Windows Side Dock"
+        KeyPath="yes" />
+      <RegistryValue Root="HKCU" Key="Software\Classes\DesktopBackground\Shell\WindowsSideDock" Name="Icon" Type="string" Value="[INSTALLFOLDER]windows-side-dock.exe" />
+      <RegistryValue Root="HKCU" Key="Software\Classes\DesktopBackground\Shell\WindowsSideDock" Name="SubCommands" Type="string" Value="" />
+      <RegistryValue Root="HKCU" Key="Software\Classes\DesktopBackground\Shell\WindowsSideDock\shell\01Folder" Name="MUIVerb" Type="string" Value="Windows Side Dockの場所を開く" />
+      <RegistryValue Root="HKCU" Key="Software\Classes\DesktopBackground\Shell\WindowsSideDock\shell\01Folder\command" Type="string" Value="explorer.exe &quot;[INSTALLFOLDER]&quot;" />
+      <RegistryValue Root="HKCU" Key="Software\Classes\DesktopBackground\Shell\WindowsSideDock\shell\02TaskManager" Name="MUIVerb" Type="string" Value="タスク マネージャー" />
+      <RegistryValue Root="HKCU" Key="Software\Classes\DesktopBackground\Shell\WindowsSideDock\shell\02TaskManager\command" Type="string" Value="taskmgr.exe" />
+    </Component>
+
+    <Component Id="DirectoryBackgroundMenu" Directory="INSTALLFOLDER" Guid="FFEE9A83-28A9-49AE-81A8-6B665D2E9F34">
+      <RegistryValue
+        Root="HKCU"
+        Key="Software\Classes\Directory\Background\Shell\WindowsSideDock"
+        Name="MUIVerb"
+        Type="string"
+        Value="Windows Side Dock"
+        KeyPath="yes" />
+      <RegistryValue Root="HKCU" Key="Software\Classes\Directory\Background\Shell\WindowsSideDock" Name="Icon" Type="string" Value="[INSTALLFOLDER]windows-side-dock.exe" />
+      <RegistryValue Root="HKCU" Key="Software\Classes\Directory\Background\Shell\WindowsSideDock" Name="SubCommands" Type="string" Value="" />
+      <RegistryValue Root="HKCU" Key="Software\Classes\Directory\Background\Shell\WindowsSideDock\shell\01Folder" Name="MUIVerb" Type="string" Value="Windows Side Dockの場所を開く" />
+      <RegistryValue Root="HKCU" Key="Software\Classes\Directory\Background\Shell\WindowsSideDock\shell\01Folder\command" Type="string" Value="explorer.exe &quot;[INSTALLFOLDER]&quot;" />
+      <RegistryValue Root="HKCU" Key="Software\Classes\Directory\Background\Shell\WindowsSideDock\shell\02TaskManager" Name="MUIVerb" Type="string" Value="タスク マネージャー" />
+      <RegistryValue Root="HKCU" Key="Software\Classes\Directory\Background\Shell\WindowsSideDock\shell\02TaskManager\command" Type="string" Value="taskmgr.exe" />
+    </Component>
+
+    <Feature Id="MainFeature" Title="Windows Side Dock" Level="1">
+      <ComponentRef Id="ApplicationFiles" />
+      <ComponentRef Id="DesktopBackgroundMenu" />
+      <ComponentRef Id="DirectoryBackgroundMenu" />
+    </Feature>
+  </Package>
+</Wix>
