@@ -10,6 +10,7 @@ pub(crate) fn left_aligned_button(ui: &mut egui::Ui, text: &str, height: f32) ->
         egui::vec2(ui.available_width(), height),
         egui::Sense::click(),
     );
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, text));
     let visuals = ui.style().interact(&response);
     ui.painter().rect(
         rect,
@@ -127,10 +128,12 @@ pub(crate) fn draw_icon_colored(
     }
 }
 
-pub(crate) fn configure_font(ctx: &egui::Context) {
-    let Ok(bytes) = std::fs::read(r"C:\Windows\Fonts\BIZ-UDGothicR.ttc") else {
-        return;
-    };
+/// BIZ UDPゴシック（BIZ-UDGothicR.ttc の2番目の書体）。
+pub(crate) const JAPANESE_FONT_PATH: &str = r"C:\Windows\Fonts\BIZ-UDGothicR.ttc";
+
+/// 日本語フォントを先頭に置いたフォント設定。フォントファイルを読めなければ `None`。
+pub(crate) fn japanese_fonts(path: &str) -> Option<egui::FontDefinitions> {
+    let bytes = std::fs::read(path).ok()?;
     let mut fonts = egui::FontDefinitions::default();
     let mut biz_udp = egui::FontData::from_owned(bytes);
     biz_udp.index = 1;
@@ -140,5 +143,25 @@ pub(crate) fn configure_font(ctx: &egui::Context) {
         .entry(egui::FontFamily::Proportional)
         .or_default()
         .insert(0, "japanese".into());
-    ctx.set_fonts(fonts);
+    Some(fonts)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn puts_japanese_font_first_when_available() {
+        let root = crate::config::temp_root("font");
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("font.ttc");
+        std::fs::write(&path, b"font").unwrap();
+        let fonts = japanese_fonts(&path.to_string_lossy()).unwrap();
+        assert_eq!(
+            fonts.families[&egui::FontFamily::Proportional][0],
+            "japanese"
+        );
+        assert_eq!(fonts.font_data["japanese"].index, 1);
+        assert!(japanese_fonts(&root.join("missing.ttc").to_string_lossy()).is_none());
+    }
 }

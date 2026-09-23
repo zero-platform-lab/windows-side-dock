@@ -1,8 +1,8 @@
 use crate::config::ProcessTool;
+use crate::platform::Platform;
 use crate::ui::normalized_executable_path;
 
 /// デスクトップ／フォルダー背景の「Windows Side Dock」サブメニュー（MSIが作成する）。
-#[cfg_attr(not(windows), allow(dead_code))]
 const MENU_ROOTS: [&str; 2] = [
     r"Software\Classes\DesktopBackground\Shell\WindowsSideDock\shell\02ProcessTool",
     r"Software\Classes\Directory\Background\Shell\WindowsSideDock\shell\02ProcessTool",
@@ -22,50 +22,25 @@ fn process_tool_entry(tool: ProcessTool, process_explorer_path: &str) -> (&'stat
 
 /// Dockの設定に合わせて背景メニューのプロセスツール項目を書き換える。
 /// MSIでインストールされていない（項目のキーがない）場合は何もしない。
-#[cfg(windows)]
-pub(crate) fn sync_process_tool_menu(tool: ProcessTool, process_explorer_path: &str) {
-    use windows_sys::Win32::System::Registry::{
-        RegCloseKey, RegOpenKeyExW, RegSetKeyValueW, HKEY, HKEY_CURRENT_USER, KEY_SET_VALUE, REG_SZ,
-    };
-
-    fn wide(value: &str) -> Vec<u16> {
-        value.encode_utf16().chain(Some(0)).collect()
-    }
-
+pub(crate) fn sync_process_tool_menu(
+    platform: &dyn Platform,
+    tool: ProcessTool,
+    process_explorer_path: &str,
+) {
     let (label, command) = process_tool_entry(tool, process_explorer_path);
     for root in MENU_ROOTS {
-        let root = wide(root);
-        let mut key: HKEY = std::ptr::null_mut();
-        if unsafe { RegOpenKeyExW(HKEY_CURRENT_USER, root.as_ptr(), 0, KEY_SET_VALUE, &mut key) }
-            != 0
-        {
+        if !platform.registry_key_exists(root) {
             continue;
         }
-        for (subkey, name, value) in [("", "MUIVerb", label), ("command", "", command.as_str())] {
-            let subkey = wide(subkey);
-            let name = wide(name);
-            let data = wide(value);
-            unsafe {
-                RegSetKeyValueW(
-                    key,
-                    subkey.as_ptr(),
-                    name.as_ptr(),
-                    REG_SZ,
-                    data.as_ptr().cast(),
-                    (data.len() * 2) as u32,
-                );
-            }
-        }
-        unsafe { RegCloseKey(key) };
+        platform.set_registry_string(root, "", "MUIVerb", label);
+        platform.set_registry_string(root, "command", "", &command);
     }
 }
-
-#[cfg(not(windows))]
-pub(crate) fn sync_process_tool_menu(_tool: ProcessTool, _process_explorer_path: &str) {}
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::platform::fake::FakePlatform;
 
     #[test]
     fn uses_task_manager_by_default() {
@@ -88,6 +63,30 @@ mod tests {
         assert_eq!(
             process_tool_entry(ProcessTool::ProcessExplorer, "  "),
             ("タスク マネージャー", "taskmgr.exe".to_owned())
+        );
+    }
+
+    #[test]
+    fn updates_only_installed_menu_entries() {
+        let platform = FakePlatform {
+            registry_keys: vec![MENU_ROOTS[1].to_owned()],
+            ..FakePlatform::default()
+        };
+        sync_process_tool_menu(&platform, ProcessTool::ProcessExplorer, r"E:\procexp.exe");
+        let values = platform.registry_values.borrow();
+        let written: Vec<_> = values.iter().collect();
+        assert_eq!(
+            written,
+            [
+                (
+                    &format!("{}|command|", MENU_ROOTS[1]),
+                    &r#""E:\procexp.exe""#.to_owned()
+                ),
+                (
+                    &format!("{}||MUIVerb", MENU_ROOTS[1]),
+                    &"Process Explorer".to_owned()
+                ),
+            ]
         );
     }
 }

@@ -1,92 +1,49 @@
 use crate::model::{group_windows, IconKind, LauncherItem, RunningWindow};
+use eframe::egui;
 
-#[cfg(windows)]
-pub(crate) fn open_target(target: &str) -> bool {
-    use std::os::windows::ffi::OsStrExt;
-    use windows_sys::Win32::UI::Shell::ShellExecuteW;
-    use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
-    let operation: Vec<u16> = "open".encode_utf16().chain(Some(0)).collect();
-    let target: Vec<u16> = std::ffi::OsStr::new(target)
-        .encode_wide()
-        .chain(Some(0))
-        .collect();
-    unsafe {
-        ShellExecuteW(
-            std::ptr::null_mut(),
-            operation.as_ptr(),
-            target.as_ptr(),
-            std::ptr::null(),
-            std::ptr::null(),
-            SW_SHOWNORMAL,
-        ) as isize
-            > 32
-    }
+/// Windowsのローカル時刻のうち、Dockの時計に使う値。`weekday` は日曜を0とする。
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct LocalTime {
+    pub(crate) month: u16,
+    pub(crate) day: u16,
+    pub(crate) weekday: u16,
+    pub(crate) hour: u16,
+    pub(crate) minute: u16,
 }
 
-#[cfg(not(windows))]
-pub(crate) fn open_target(_target: &str) -> bool {
-    false
+/// OSへの問い合わせと操作。実装は `win32.rs`、テストでは記録用の偽物を使う。
+/// 判断を伴う処理はここへ置かず、呼び出し側の関数でテストする。
+pub(crate) trait Platform {
+    fn open_target(&self, target: &str) -> bool;
+    /// 表示中でタイトルを持つ他プロセスのウィンドウ `(ハンドル, 実行ファイル, タイトル)`。
+    fn visible_windows(&self) -> Vec<(isize, String, String)>;
+    fn foreground_window(&self) -> isize;
+    fn is_minimized(&self, window: isize) -> bool;
+    fn minimize(&self, window: isize);
+    fn restore(&self, window: isize);
+    fn set_foreground(&self, window: isize);
+    fn close_window(&self, window: isize);
+    fn load_icon(&self, path: &str) -> Option<egui::ColorImage>;
+    fn cursor_position(&self) -> Option<egui::Pos2>;
+    /// Dock本体のウィンドウの画面座標。
+    fn dock_rect(&self) -> Option<egui::Rect>;
+    fn screen_width(&self) -> f32;
+    fn work_area(&self) -> Option<egui::Rect>;
+    fn local_time(&self) -> LocalTime;
+    fn choose_executable(&self) -> Option<String>;
+    /// Dockの実行ファイルがあるフォルダー。
+    fn install_directory(&self) -> Option<std::path::PathBuf>;
+    /// `HKEY_CURRENT_USER` 配下のキーが存在するか。
+    fn registry_key_exists(&self, key: &str) -> bool;
+    /// `HKEY_CURRENT_USER\key\subkey` の文字列値を書き込む。キーがなければ作られる。
+    fn set_registry_string(&self, key: &str, subkey: &str, name: &str, value: &str);
 }
 
-#[cfg(windows)]
-pub(crate) fn running_apps() -> Vec<LauncherItem> {
-    use windows_sys::core::BOOL;
-    use windows_sys::Win32::Foundation::{CloseHandle, HWND, LPARAM};
-    use windows_sys::Win32::System::Threading::{
-        GetCurrentProcessId, OpenProcess, QueryFullProcessImageNameW,
-        PROCESS_QUERY_LIMITED_INFORMATION,
-    };
-    use windows_sys::Win32::UI::WindowsAndMessaging::{
-        EnumWindows, GetForegroundWindow, GetWindowTextLengthW, GetWindowTextW,
-        GetWindowThreadProcessId, IsWindowVisible,
-    };
-
-    unsafe extern "system" fn enumerate(hwnd: HWND, parameter: LPARAM) -> BOOL {
-        if IsWindowVisible(hwnd) == 0 || GetWindowTextLengthW(hwnd) == 0 {
-            return 1;
-        }
-        let mut process_id = 0;
-        GetWindowThreadProcessId(hwnd, &mut process_id);
-        if process_id == 0 || process_id == GetCurrentProcessId() {
-            return 1;
-        }
-        let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, process_id);
-        if process.is_null() {
-            return 1;
-        }
-        let mut path = vec![0_u16; 32768];
-        let mut length = path.len() as u32;
-        let success = QueryFullProcessImageNameW(process, 0, path.as_mut_ptr(), &mut length);
-        CloseHandle(process);
-        if success == 0 || length == 0 {
-            return 1;
-        }
-        let command = String::from_utf16_lossy(&path[..length as usize]);
-        let title_length = GetWindowTextLengthW(hwnd);
-        let mut title_buffer = vec![0_u16; title_length.max(0) as usize + 1];
-        let copied = GetWindowTextW(hwnd, title_buffer.as_mut_ptr(), title_buffer.len() as i32);
-        let title = if copied > 0 {
-            String::from_utf16_lossy(&title_buffer[..copied as usize])
-        } else {
-            command.clone()
-        };
-        (&mut *(parameter as *mut Vec<(isize, String, String)>)).push((
-            hwnd as isize,
-            command,
-            title,
-        ));
-        1
-    }
-
-    let mut windows = Vec::<(isize, String, String)>::new();
-    unsafe {
-        EnumWindows(Some(enumerate), &mut windows as *mut _ as LPARAM);
-    }
-    let foreground = unsafe { GetForegroundWindow() as isize };
-    group_windows(windows, foreground)
+pub(crate) fn running_apps(platform: &dyn Platform) -> Vec<LauncherItem> {
+    group_windows(platform.visible_windows(), platform.foreground_window())
         .into_iter()
         .map(|group| LauncherItem {
-            icon: load_shell_icon(&group.command),
+            icon: platform.load_icon(&group.command),
             name: group.name,
             command: group.command,
             fallback_icon: IconKind::File,
@@ -96,143 +53,165 @@ pub(crate) fn running_apps() -> Vec<LauncherItem> {
         .collect()
 }
 
-#[cfg(not(windows))]
-pub(crate) fn running_apps() -> Vec<LauncherItem> {
-    Vec::new()
+/// タスクバーのボタンと同じ動作。前面のウィンドウなら最小化し、それ以外は前面へ出す。
+/// 通常表示中のウィンドウを復元するとちらつくため、最小化中のときだけ復元する。
+pub(crate) fn activate_windows(platform: &dyn Platform, windows: &[RunningWindow]) {
+    let Some(window) = windows.first() else {
+        return;
+    };
+    if platform.foreground_window() == window.handle {
+        platform.minimize(window.handle);
+        return;
+    }
+    if platform.is_minimized(window.handle) {
+        platform.restore(window.handle);
+    }
+    platform.set_foreground(window.handle);
 }
 
-#[cfg(windows)]
-pub(crate) fn activate_taskbar_item(windows: &[RunningWindow]) {
-    use windows_sys::Win32::Foundation::HWND;
-    use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GetForegroundWindow, IsIconic, SetForegroundWindow, ShowWindow, SW_MINIMIZE, SW_RESTORE,
-    };
-    if let Some(item) = windows.first() {
-        unsafe {
-            let window = item.handle as HWND;
-            if GetForegroundWindow() == window {
-                ShowWindow(window, SW_MINIMIZE);
-            } else {
-                if IsIconic(window) != 0 {
-                    ShowWindow(window, SW_RESTORE);
-                }
-                SetForegroundWindow(window);
-            }
-        }
+pub(crate) fn close_windows(platform: &dyn Platform, windows: &[RunningWindow]) {
+    for window in windows {
+        platform.close_window(window.handle);
     }
 }
 
+/// OSを持たない環境向けの何もしない実装。Windows以外でのビルドと起動だけを支える。
 #[cfg(not(windows))]
-pub(crate) fn activate_taskbar_item(_windows: &[RunningWindow]) {}
+pub(crate) struct NullPlatform;
 
-#[cfg(windows)]
-pub(crate) fn close_all_windows(windows: &[RunningWindow]) {
-    use windows_sys::Win32::Foundation::HWND;
-    use windows_sys::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_CLOSE};
-    for item in windows {
-        unsafe {
-            PostMessageW(item.handle as HWND, WM_CLOSE, 0, 0);
+#[cfg(not(windows))]
+impl Platform for NullPlatform {
+    fn open_target(&self, _target: &str) -> bool {
+        false
+    }
+    fn visible_windows(&self) -> Vec<(isize, String, String)> {
+        Vec::new()
+    }
+    fn foreground_window(&self) -> isize {
+        0
+    }
+    fn is_minimized(&self, _window: isize) -> bool {
+        false
+    }
+    fn minimize(&self, _window: isize) {}
+    fn restore(&self, _window: isize) {}
+    fn set_foreground(&self, _window: isize) {}
+    fn close_window(&self, _window: isize) {}
+    fn load_icon(&self, _path: &str) -> Option<egui::ColorImage> {
+        None
+    }
+    fn cursor_position(&self) -> Option<egui::Pos2> {
+        None
+    }
+    fn dock_rect(&self) -> Option<egui::Rect> {
+        None
+    }
+    fn screen_width(&self) -> f32 {
+        0.0
+    }
+    fn work_area(&self) -> Option<egui::Rect> {
+        None
+    }
+    fn local_time(&self) -> LocalTime {
+        LocalTime {
+            month: 1,
+            day: 1,
+            weekday: 0,
+            hour: 0,
+            minute: 0,
         }
     }
+    fn choose_executable(&self) -> Option<String> {
+        None
+    }
+    fn install_directory(&self) -> Option<std::path::PathBuf> {
+        None
+    }
+    fn registry_key_exists(&self, _key: &str) -> bool {
+        false
+    }
+    fn set_registry_string(&self, _key: &str, _subkey: &str, _name: &str, _value: &str) {}
 }
 
-#[cfg(not(windows))]
-pub(crate) fn close_all_windows(_windows: &[RunningWindow]) {}
+#[cfg(test)]
+#[path = "platform_fake.rs"]
+pub(crate) mod fake;
 
-#[cfg(windows)]
-pub(crate) fn load_shell_icon(path: &str) -> Option<eframe::egui::ColorImage> {
-    use std::ffi::OsStr;
-    use std::os::windows::ffi::OsStrExt;
-    use windows_sys::Win32::Foundation::HINSTANCE;
-    use windows_sys::Win32::Graphics::Gdi::{
-        CreateCompatibleDC, CreateDIBSection, DeleteDC, DeleteObject, SelectObject, BITMAPINFO,
-        BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS,
-    };
-    use windows_sys::Win32::UI::Shell::{SHGetFileInfoW, SHFILEINFOW, SHGFI_ICON, SHGFI_LARGEICON};
-    use windows_sys::Win32::UI::WindowsAndMessaging::{DestroyIcon, DrawIconEx, DI_NORMAL};
-    const SIZE: usize = 48;
-    let wide: Vec<u16> = OsStr::new(path).encode_wide().chain(Some(0)).collect();
-    let mut info = SHFILEINFOW::default();
-    if unsafe {
-        SHGetFileInfoW(
-            wide.as_ptr(),
-            0,
-            &mut info,
-            size_of::<SHFILEINFOW>() as u32,
-            SHGFI_ICON | SHGFI_LARGEICON,
-        )
-    } == 0
-        || info.hIcon.is_null()
-    {
-        return None;
-    }
-    let dc = unsafe { CreateCompatibleDC(std::ptr::null_mut()) };
-    if dc.is_null() {
-        unsafe {
-            DestroyIcon(info.hIcon);
+#[cfg(test)]
+mod tests {
+    use super::fake::FakePlatform;
+    use super::*;
+
+    fn window(handle: isize) -> RunningWindow {
+        RunningWindow {
+            handle,
+            title: format!("window {handle}"),
         }
-        return None;
     }
-    let mut bitmap_info = BITMAPINFO::default();
-    bitmap_info.bmiHeader = BITMAPINFOHEADER {
-        biSize: size_of::<BITMAPINFOHEADER>() as u32,
-        biWidth: SIZE as i32,
-        biHeight: -(SIZE as i32),
-        biPlanes: 1,
-        biBitCount: 32,
-        biCompression: BI_RGB,
-        ..Default::default()
-    };
-    let mut bits = std::ptr::null_mut();
-    let bitmap = unsafe {
-        CreateDIBSection(
-            dc,
-            &bitmap_info,
-            DIB_RGB_COLORS,
-            &mut bits,
-            std::ptr::null_mut::<std::ffi::c_void>() as HINSTANCE,
-            0,
-        )
-    };
-    if bitmap.is_null() || bits.is_null() {
-        unsafe {
-            DeleteDC(dc);
-            DestroyIcon(info.hIcon);
-        }
-        return None;
+
+    #[test]
+    fn builds_running_apps_with_icons() {
+        let platform = FakePlatform {
+            icons: true,
+            foreground: 2,
+            ..FakePlatform::default()
+        };
+        platform.windows.replace(vec![
+            (
+                1,
+                r"C:\Apps\Code.exe".into(),
+                "a - Visual Studio Code".into(),
+            ),
+            (
+                2,
+                r"C:\Apps\Code.exe".into(),
+                "b - Visual Studio Code".into(),
+            ),
+        ]);
+        let apps = running_apps(&platform);
+        assert_eq!(apps.len(), 1);
+        assert_eq!(apps[0].name, "Visual Studio Code");
+        assert!(apps[0].icon.is_some());
+        assert!(apps[0].active);
+        assert_eq!(apps[0].windows.len(), 2);
     }
-    let old = unsafe { SelectObject(dc, bitmap) };
-    unsafe {
-        DrawIconEx(
-            dc,
-            0,
-            0,
-            info.hIcon,
-            SIZE as i32,
-            SIZE as i32,
-            0,
-            std::ptr::null_mut(),
-            DI_NORMAL,
+
+    #[test]
+    fn minimizes_the_foreground_window() {
+        let platform = FakePlatform {
+            foreground: 7,
+            ..FakePlatform::default()
+        };
+        activate_windows(&platform, &[window(7), window(8)]);
+        assert_eq!(platform.calls(), ["minimize 7"]);
+    }
+
+    #[test]
+    fn restores_only_minimized_windows_before_focusing() {
+        let platform = FakePlatform {
+            minimized: vec![5],
+            ..FakePlatform::default()
+        };
+        activate_windows(&platform, &[window(5)]);
+        activate_windows(&platform, &[window(6)]);
+        assert_eq!(
+            platform.calls(),
+            ["restore 5", "foreground 5", "foreground 6"]
         );
     }
-    let bgra = unsafe { std::slice::from_raw_parts(bits as *const u8, SIZE * SIZE * 4) };
-    let mut rgba = Vec::with_capacity(bgra.len());
-    for p in bgra.chunks_exact(4) {
-        rgba.extend_from_slice(&[p[2], p[1], p[0], p[3]]);
-    }
-    unsafe {
-        SelectObject(dc, old);
-        DeleteObject(bitmap);
-        DeleteDC(dc);
-        DestroyIcon(info.hIcon);
-    }
-    Some(eframe::egui::ColorImage::from_rgba_unmultiplied(
-        [SIZE, SIZE],
-        &rgba,
-    ))
-}
 
-#[cfg(not(windows))]
-pub(crate) fn load_shell_icon(_path: &str) -> Option<eframe::egui::ColorImage> {
-    None
+    #[test]
+    fn ignores_empty_window_list() {
+        let platform = FakePlatform::default();
+        activate_windows(&platform, &[]);
+        close_windows(&platform, &[]);
+        assert!(platform.calls().is_empty());
+    }
+
+    #[test]
+    fn closes_every_window() {
+        let platform = FakePlatform::default();
+        close_windows(&platform, &[window(1), window(2)]);
+        assert_eq!(platform.calls(), ["close 1", "close 2"]);
+    }
 }

@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum PopupDirection {
@@ -16,57 +16,103 @@ pub(crate) enum ProcessTool {
 const CONFIG_DIR: &str = "windows-side-dock";
 /// アプリ名変更前（0.1.5以前）の保存先。移行元としてだけ読む。
 const LEGACY_CONFIG_DIR: &str = "lancher";
+const ITEMS_FILE: &str = "items.txt";
+const POPUP_DIRECTION_FILE: &str = "settings.txt";
+const PROCESS_TOOL_FILE: &str = "process_tool.txt";
+const PROCESS_EXPLORER_PATH_FILE: &str = "process_explorer_path.txt";
 const CONFIG_FILES: [&str; 4] = [
-    "items.txt",
-    "settings.txt",
-    "process_tool.txt",
-    "process_explorer_path.txt",
+    ITEMS_FILE,
+    POPUP_DIRECTION_FILE,
+    PROCESS_TOOL_FILE,
+    PROCESS_EXPLORER_PATH_FILE,
 ];
 
-fn config_file_in(local_app_data: &Path, name: &str) -> PathBuf {
-    local_app_data.join(CONFIG_DIR).join(name)
+/// `%LOCALAPPDATA%\windows-side-dock` 以下の設定ファイル。
+/// 保存先が決まらない（`LOCALAPPDATA` がない）場合は読み込みも保存もしない。
+pub(crate) struct ConfigStore {
+    local_app_data: Option<PathBuf>,
 }
 
-fn config_file(name: &str) -> Option<PathBuf> {
-    std::env::var_os("LOCALAPPDATA").map(|root| config_file_in(Path::new(&root), name))
-}
+impl ConfigStore {
+    pub(crate) fn new(local_app_data: Option<PathBuf>) -> Self {
+        Self { local_app_data }
+    }
 
-/// 旧フォルダーの設定を新フォルダーへコピーする。新フォルダーに既にあるファイルは上書きしない。
-/// 旧フォルダーは戻せるように残し、失敗したファイルは次回起動時に再試行される。
-fn migrate_legacy_config_in(local_app_data: &Path) {
-    for name in CONFIG_FILES {
-        let target = config_file_in(local_app_data, name);
-        let source = local_app_data.join(LEGACY_CONFIG_DIR).join(name);
-        if target.exists() || !source.is_file() {
-            continue;
+    pub(crate) fn from_env() -> Self {
+        Self::new(std::env::var_os("LOCALAPPDATA").map(PathBuf::from))
+    }
+
+    fn read(&self, name: &str) -> Option<String> {
+        let root = self.local_app_data.as_ref()?;
+        std::fs::read_to_string(root.join(CONFIG_DIR).join(name)).ok()
+    }
+
+    fn write(&self, name: &str, value: &str) {
+        let Some(root) = &self.local_app_data else {
+            return;
+        };
+        let directory = root.join(CONFIG_DIR);
+        let _ = std::fs::create_dir_all(&directory);
+        let _ = std::fs::write(directory.join(name), value);
+    }
+
+    /// 旧フォルダーの設定を新フォルダーへコピーする。新フォルダーに既にあるファイルは上書きしない。
+    /// 旧フォルダーは戻せるように残し、失敗したファイルは次回起動時に再試行される。
+    pub(crate) fn migrate_legacy(&self) {
+        let Some(root) = &self.local_app_data else {
+            return;
+        };
+        let directory = root.join(CONFIG_DIR);
+        for name in CONFIG_FILES {
+            let source = root.join(LEGACY_CONFIG_DIR).join(name);
+            let target = directory.join(name);
+            if target.exists() || !source.is_file() {
+                continue;
+            }
+            let _ = std::fs::create_dir_all(&directory);
+            let _ = std::fs::copy(&source, &target);
         }
-        if let Some(parent) = target.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        let _ = std::fs::copy(&source, &target);
     }
-}
 
-pub(crate) fn migrate_legacy_config() {
-    if let Some(root) = std::env::var_os("LOCALAPPDATA") {
-        migrate_legacy_config_in(Path::new(&root));
+    pub(crate) fn load_registered_items(&self) -> Vec<(String, String)> {
+        self.read(ITEMS_FILE)
+            .map_or_else(Vec::new, |contents| parse_registered_items(&contents))
     }
-}
 
-fn read_setting(path: Option<PathBuf>) -> Option<String> {
-    path.and_then(|path| std::fs::read_to_string(path).ok())
-}
-
-fn write_setting(path: Option<PathBuf>, value: &str) {
-    let Some(path) = path else { return };
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
+    pub(crate) fn save_registered_items<'a>(
+        &self,
+        items: impl Iterator<Item = (&'a str, &'a str)>,
+    ) {
+        self.write(ITEMS_FILE, &format_registered_items(items));
     }
-    let _ = std::fs::write(path, value);
-}
 
-fn config_path() -> Option<PathBuf> {
-    config_file("items.txt")
+    pub(crate) fn load_popup_direction(&self) -> PopupDirection {
+        self.read(POPUP_DIRECTION_FILE)
+            .map_or(PopupDirection::Auto, |value| parse_popup_direction(&value))
+    }
+
+    pub(crate) fn save_popup_direction(&self, direction: PopupDirection) {
+        self.write(POPUP_DIRECTION_FILE, popup_direction_value(direction));
+    }
+
+    pub(crate) fn load_process_tool(&self) -> ProcessTool {
+        self.read(PROCESS_TOOL_FILE)
+            .map_or(ProcessTool::TaskManager, |value| parse_process_tool(&value))
+    }
+
+    pub(crate) fn save_process_tool(&self, tool: ProcessTool) {
+        self.write(PROCESS_TOOL_FILE, process_tool_value(tool));
+    }
+
+    pub(crate) fn load_process_explorer_path(&self) -> String {
+        self.read(PROCESS_EXPLORER_PATH_FILE)
+            .map(|value| value.trim().to_owned())
+            .unwrap_or_default()
+    }
+
+    pub(crate) fn save_process_explorer_path(&self, value: &str) {
+        self.write(PROCESS_EXPLORER_PATH_FILE, value.trim());
+    }
 }
 
 /// `items.txt` の各行 `名前|コマンド` を読み取る。区切りのない行は無視する。
@@ -85,18 +131,6 @@ fn format_registered_items<'a>(items: impl Iterator<Item = (&'a str, &'a str)>) 
         .join("\n")
 }
 
-pub(crate) fn load_registered_items() -> Vec<(String, String)> {
-    read_setting(config_path()).map_or_else(Vec::new, |contents| parse_registered_items(&contents))
-}
-
-pub(crate) fn save_registered_items<'a>(items: impl Iterator<Item = (&'a str, &'a str)>) {
-    write_setting(config_path(), &format_registered_items(items));
-}
-
-fn settings_path() -> Option<PathBuf> {
-    config_file("settings.txt")
-}
-
 fn parse_popup_direction(value: &str) -> PopupDirection {
     match value.trim() {
         "left" => PopupDirection::Left,
@@ -113,23 +147,6 @@ fn popup_direction_value(direction: PopupDirection) -> &'static str {
     }
 }
 
-pub(crate) fn load_popup_direction() -> PopupDirection {
-    read_setting(settings_path())
-        .map_or(PopupDirection::Auto, |value| parse_popup_direction(&value))
-}
-
-pub(crate) fn save_popup_direction(direction: PopupDirection) {
-    write_setting(settings_path(), popup_direction_value(direction));
-}
-
-fn process_tool_path() -> Option<PathBuf> {
-    config_file("process_tool.txt")
-}
-
-fn process_explorer_path_file() -> Option<PathBuf> {
-    config_file("process_explorer_path.txt")
-}
-
 fn parse_process_tool(value: &str) -> ProcessTool {
     match value.trim() {
         "process_explorer" => ProcessTool::ProcessExplorer,
@@ -144,69 +161,22 @@ fn process_tool_value(tool: ProcessTool) -> &'static str {
     }
 }
 
-pub(crate) fn load_process_tool() -> ProcessTool {
-    read_setting(process_tool_path())
-        .map_or(ProcessTool::TaskManager, |value| parse_process_tool(&value))
-}
-
-pub(crate) fn save_process_tool(tool: ProcessTool) {
-    write_setting(process_tool_path(), process_tool_value(tool));
-}
-
-pub(crate) fn load_process_explorer_path() -> String {
-    read_setting(process_explorer_path_file())
-        .map(|value| value.trim().to_owned())
-        .unwrap_or_default()
-}
-
-pub(crate) fn save_process_explorer_path(value: &str) {
-    write_setting(process_explorer_path_file(), value.trim());
-}
-
-#[cfg(windows)]
-pub(crate) fn choose_process_explorer_file() -> Option<String> {
-    use std::os::windows::ffi::OsStrExt;
-    use windows_sys::Win32::UI::Controls::Dialogs::{
-        GetOpenFileNameW, OFN_FILEMUSTEXIST, OFN_PATHMUSTEXIST, OPENFILENAMEW,
-    };
-    use windows_sys::Win32::UI::WindowsAndMessaging::FindWindowW;
-
-    let owner_title: Vec<u16> = std::ffi::OsStr::new("Windows Side Dock 設定")
-        .encode_wide()
-        .chain(Some(0))
-        .collect();
-    let dialog_title: Vec<u16> = std::ffi::OsStr::new("Process Explorerを選択")
-        .encode_wide()
-        .chain(Some(0))
-        .collect();
-    let filter: Vec<u16> = "実行ファイル (*.exe)\0*.exe\0すべてのファイル\0*.*\0\0"
-        .encode_utf16()
-        .collect();
-    let mut file_buffer = vec![0_u16; 32768];
-    let mut options = OPENFILENAMEW::default();
-    options.lStructSize = std::mem::size_of::<OPENFILENAMEW>() as u32;
-    options.hwndOwner = unsafe { FindWindowW(std::ptr::null(), owner_title.as_ptr()) };
-    options.lpstrFilter = filter.as_ptr();
-    options.lpstrFile = file_buffer.as_mut_ptr();
-    options.nMaxFile = file_buffer.len() as u32;
-    options.lpstrTitle = dialog_title.as_ptr();
-    options.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST;
-
-    if unsafe { GetOpenFileNameW(&mut options) } == 0 {
-        return None;
-    }
-    let length = file_buffer.iter().position(|&value| value == 0)?;
-    Some(String::from_utf16_lossy(&file_buffer[..length]))
-}
-
-#[cfg(not(windows))]
-pub(crate) fn choose_process_explorer_file() -> Option<String> {
-    None
+/// テスト用の一時フォルダー。テストごとに名前を分け、前回の残りは消してから返す。
+#[cfg(test)]
+pub(crate) fn temp_root(test: &str) -> PathBuf {
+    let root = std::env::temp_dir().join(format!("wsd-{test}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    root
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
+
+    fn store(root: &Path) -> ConfigStore {
+        ConfigStore::new(Some(root.to_path_buf()))
+    }
 
     #[test]
     fn parses_popup_direction_with_safe_default() {
@@ -243,18 +213,54 @@ mod tests {
     }
 
     #[test]
-    fn stores_settings_under_application_folder() {
-        let root = Path::new(r"C:\Users\me\AppData\Local");
+    fn saves_every_setting_under_application_folder() {
+        let root = temp_root("store-round-trip");
+        let config = store(&root);
+        config.save_registered_items([("Code", r"C:\Code.exe")].into_iter());
+        config.save_popup_direction(PopupDirection::Left);
+        config.save_process_tool(ProcessTool::ProcessExplorer);
+        config.save_process_explorer_path("  E:\\procexp.exe \n");
+
+        let reloaded = store(&root);
         assert_eq!(
-            config_file_in(root, "items.txt"),
-            root.join("windows-side-dock").join("items.txt")
+            reloaded.load_registered_items(),
+            [("Code".to_owned(), r"C:\Code.exe".to_owned())]
         );
+        assert_eq!(reloaded.load_popup_direction(), PopupDirection::Left);
+        assert_eq!(reloaded.load_process_tool(), ProcessTool::ProcessExplorer);
+        assert_eq!(reloaded.load_process_explorer_path(), r"E:\procexp.exe");
+        assert!(root
+            .join("windows-side-dock")
+            .join("settings.txt")
+            .is_file());
+        let _ = std::fs::remove_dir_all(root);
     }
 
-    fn temp_root(test: &str) -> PathBuf {
-        let root = std::env::temp_dir().join(format!("wsd-{test}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        root
+    #[test]
+    fn uses_defaults_when_files_are_missing() {
+        let root = temp_root("store-defaults");
+        let config = store(&root);
+        assert!(config.load_registered_items().is_empty());
+        assert_eq!(config.load_popup_direction(), PopupDirection::Auto);
+        assert_eq!(config.load_process_tool(), ProcessTool::TaskManager);
+        assert_eq!(config.load_process_explorer_path(), "");
+    }
+
+    #[test]
+    fn does_nothing_without_local_app_data() {
+        let config = ConfigStore::new(None);
+        config.save_popup_direction(PopupDirection::Right);
+        config.migrate_legacy();
+        assert_eq!(config.load_popup_direction(), PopupDirection::Auto);
+    }
+
+    #[test]
+    fn reads_local_app_data_from_environment() {
+        let config = ConfigStore::from_env();
+        assert_eq!(
+            config.local_app_data,
+            std::env::var_os("LOCALAPPDATA").map(PathBuf::from)
+        );
     }
 
     #[test]
@@ -266,9 +272,9 @@ mod tests {
         std::fs::write(legacy.join("process_tool.txt"), "process_explorer").unwrap();
         std::fs::write(legacy.join("unrelated.txt"), "x").unwrap();
 
-        migrate_legacy_config_in(&root);
+        store(&root).migrate_legacy();
 
-        let read = |name| std::fs::read_to_string(config_file_in(&root, name)).ok();
+        let read = |name| store(&root).read(name);
         assert_eq!(read("items.txt").as_deref(), Some("Code|C:\\Code.exe"));
         assert_eq!(
             read("process_tool.txt").as_deref(),
@@ -285,15 +291,13 @@ mod tests {
         let root = temp_root("migrate-keep");
         std::fs::create_dir_all(root.join("lancher")).unwrap();
         std::fs::write(root.join("lancher").join("settings.txt"), "left").unwrap();
-        write_setting(Some(config_file_in(&root, "settings.txt")), "right");
+        let config = store(&root);
+        config.save_popup_direction(PopupDirection::Right);
 
-        migrate_legacy_config_in(&root);
-        migrate_legacy_config_in(&root);
+        config.migrate_legacy();
+        config.migrate_legacy();
 
-        assert_eq!(
-            read_setting(Some(config_file_in(&root, "settings.txt"))).as_deref(),
-            Some("right")
-        );
+        assert_eq!(config.load_popup_direction(), PopupDirection::Right);
         let _ = std::fs::remove_dir_all(root);
     }
 
@@ -301,7 +305,7 @@ mod tests {
     fn migration_without_legacy_folder_creates_nothing() {
         let root = temp_root("migrate-none");
         std::fs::create_dir_all(&root).unwrap();
-        migrate_legacy_config_in(&root);
+        store(&root).migrate_legacy();
         assert!(!root.join("windows-side-dock").exists());
         let _ = std::fs::remove_dir_all(root);
     }
@@ -331,18 +335,5 @@ mod tests {
                 ("メモ帳".to_owned(), r"C:\x y.exe".to_owned()),
             ]
         );
-    }
-
-    #[test]
-    fn writes_settings_into_missing_folders() {
-        let root = temp_root("write-setting");
-        let path = config_file_in(&root, "settings.txt");
-        write_setting(Some(path.clone()), "left");
-        assert_eq!(read_setting(Some(path)).as_deref(), Some("left"));
-        assert_eq!(
-            read_setting(Some(config_file_in(&root, "missing.txt"))),
-            None
-        );
-        let _ = std::fs::remove_dir_all(root);
     }
 }

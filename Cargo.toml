@@ -16,3 +16,9 @@ windows-sys = { version = "0.61", features = [
 	"Win32_UI_Controls_Dialogs",
 	"Win32_UI_WindowsAndMessaging",
 ] }
+
+[dev-dependencies]
+egui_kittest = { version = "0.33", features = ["eframe"] }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(coverage_nightly)"] }

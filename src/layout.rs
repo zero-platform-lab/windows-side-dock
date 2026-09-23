@@ -1,4 +1,5 @@
 use crate::config::PopupDirection;
+use crate::platform::{LocalTime, Platform};
 use eframe::egui::{self, Color32};
 use std::time::{Duration, Instant};
 
@@ -6,6 +7,9 @@ pub(crate) const SETTINGS_WIDTH: f32 = 380.0;
 pub(crate) const TOOLTIP_WIDTH: f32 = 220.0;
 pub(crate) const CONTEXT_MENU_WIDTH: f32 = 210.0;
 pub(crate) const WINDOW_PICKER_WIDTH: f32 = 480.0;
+const DOCK_WIDTH: f32 = 54.0;
+const DOCK_MAX_HEIGHT: f32 = 800.0;
+const DOCK_MARGIN: f32 = 12.0;
 
 /// 基準範囲の左右どちらかへ、幅 `width` のポップアップを `gap` だけ離して置くときの左端X座標。
 fn beside_x(anchor_left: f32, anchor_right: f32, open_left: bool, width: f32, gap: f32) -> f32 {
@@ -16,154 +20,112 @@ fn beside_x(anchor_left: f32, anchor_right: f32, open_left: bool, width: f32, ga
     }
 }
 
-#[cfg_attr(not(windows), allow(dead_code))]
-fn center_in_right_half(left: i32, right: i32, screen_width: i32) -> bool {
-    (left + right) / 2 > screen_width / 2
+/// Dockが画面の右半分にあれば、ポップアップは左へ開く。Dockが見つからなければ左へ開く。
+pub(crate) fn popup_should_open_left(platform: &dyn Platform) -> bool {
+    platform
+        .dock_rect()
+        .is_none_or(|dock| dock.center().x > platform.screen_width() / 2.0)
 }
 
-#[cfg(windows)]
-pub(crate) fn popup_should_open_left(_ctx: &egui::Context) -> bool {
-    use std::os::windows::ffi::OsStrExt;
-    use windows_sys::Win32::Foundation::RECT;
-    use windows_sys::Win32::UI::WindowsAndMessaging::{
-        FindWindowW, GetSystemMetrics, GetWindowRect,
+pub(crate) fn popup_alignment(
+    platform: &dyn Platform,
+    direction: PopupDirection,
+) -> egui::RectAlign {
+    let open_left = match direction {
+        PopupDirection::Auto => popup_should_open_left(platform),
+        PopupDirection::Left => true,
+        PopupDirection::Right => false,
     };
-
-    let title: Vec<u16> = std::ffi::OsStr::new("Windows Side Dock")
-        .encode_wide()
-        .chain(Some(0))
-        .collect();
-    let window = unsafe { FindWindowW(std::ptr::null(), title.as_ptr()) };
-    if window.is_null() {
-        return true;
-    }
-    let mut rect = RECT::default();
-    if unsafe { GetWindowRect(window, &mut rect) } == 0 {
-        return true;
-    }
-    let screen_width = unsafe { GetSystemMetrics(0) };
-    center_in_right_half(rect.left, rect.right, screen_width)
-}
-
-#[cfg(windows)]
-pub(crate) fn launcher_window_position() -> Option<egui::Pos2> {
-    use std::os::windows::ffi::OsStrExt;
-    use windows_sys::Win32::Foundation::RECT;
-    use windows_sys::Win32::UI::WindowsAndMessaging::{FindWindowW, GetWindowRect};
-
-    let title: Vec<u16> = std::ffi::OsStr::new("Windows Side Dock")
-        .encode_wide()
-        .chain(Some(0))
-        .collect();
-    let window = unsafe { FindWindowW(std::ptr::null(), title.as_ptr()) };
-    let mut rect = RECT::default();
-    if window.is_null() || unsafe { GetWindowRect(window, &mut rect) } == 0 {
-        None
-    } else {
-        Some(egui::pos2(rect.left as f32, rect.top as f32))
-    }
-}
-
-#[cfg(not(windows))]
-pub(crate) fn launcher_window_position() -> Option<egui::Pos2> {
-    None
-}
-
-#[cfg(not(windows))]
-pub(crate) fn popup_should_open_left(ctx: &egui::Context) -> bool {
-    ctx.input(|input| {
-        let viewport = input.viewport();
-        match (viewport.outer_rect, viewport.monitor_size) {
-            (Some(rect), Some(monitor)) => rect.center().x > monitor.x / 2.0,
-            _ => true,
-        }
-    })
-}
-
-pub(crate) fn popup_alignment(ctx: &egui::Context) -> egui::RectAlign {
-    if popup_should_open_left(ctx) {
+    if open_left {
         egui::RectAlign::LEFT
     } else {
         egui::RectAlign::RIGHT
     }
 }
 
-#[cfg(windows)]
+pub(crate) fn launcher_window_position(platform: &dyn Platform) -> Option<egui::Pos2> {
+    platform.dock_rect().map(|dock| dock.min)
+}
+
 pub(crate) fn settings_dialog_position(
-    ctx: &egui::Context,
+    platform: &dyn Platform,
     direction: PopupDirection,
 ) -> egui::Pos2 {
-    use std::os::windows::ffi::OsStrExt;
-    use windows_sys::Win32::Foundation::RECT;
-    use windows_sys::Win32::UI::WindowsAndMessaging::{FindWindowW, GetWindowRect};
-
-    let title: Vec<u16> = std::ffi::OsStr::new("Windows Side Dock")
-        .encode_wide()
-        .chain(Some(0))
-        .collect();
-    let window = unsafe { FindWindowW(std::ptr::null(), title.as_ptr()) };
-    let mut rect = RECT::default();
-    if !window.is_null() && unsafe { GetWindowRect(window, &mut rect) } != 0 {
-        let open_left = match direction {
-            PopupDirection::Auto => popup_should_open_left(ctx),
-            PopupDirection::Left => true,
-            PopupDirection::Right => false,
-        };
-        let x = beside_x(
-            rect.left as f32,
-            rect.right as f32,
-            open_left,
-            SETTINGS_WIDTH,
-            12.0,
-        );
-        egui::pos2(x, rect.top as f32)
-    } else {
-        egui::pos2(100.0, 100.0)
-    }
+    let Some(dock) = platform.dock_rect() else {
+        return egui::pos2(100.0, 100.0);
+    };
+    let open_left = popup_alignment(platform, direction) == egui::RectAlign::LEFT;
+    let x = beside_x(dock.left(), dock.right(), open_left, SETTINGS_WIDTH, 12.0);
+    egui::pos2(x, dock.top())
 }
 
-#[cfg(not(windows))]
-pub(crate) fn settings_dialog_position(
-    _ctx: &egui::Context,
-    _direction: PopupDirection,
-) -> egui::Pos2 {
-    egui::pos2(100.0, 100.0)
+/// 横位置はDockの左右の端、縦位置はカーソルの高さを基準にする。
+/// Dockが見つからない場合はカーソル位置を基準にする。
+fn beside_dock_at_cursor(
+    platform: &dyn Platform,
+    open_left: bool,
+    width: f32,
+) -> Option<egui::Pos2> {
+    let cursor = platform.cursor_position()?;
+    let (left, right) = platform
+        .dock_rect()
+        .map_or((cursor.x, cursor.x), |dock| (dock.left(), dock.right()));
+    let x = beside_x(left, right, open_left, width, 8.0);
+    Some(egui::pos2(x, cursor.y))
 }
 
+pub(crate) fn context_menu_screen_position(
+    platform: &dyn Platform,
+    open_left: bool,
+) -> Option<egui::Pos2> {
+    beside_dock_at_cursor(platform, open_left, CONTEXT_MENU_WIDTH)
+}
+
+pub(crate) fn window_picker_screen_position(
+    platform: &dyn Platform,
+    open_left: bool,
+) -> Option<egui::Pos2> {
+    beside_dock_at_cursor(platform, open_left, WINDOW_PICKER_WIDTH)
+}
+
+/// ツールチップはDockの外側、対象アイコンの高さに出す。`item_center_y` はDock内の座標。
+fn tooltip_screen_position(
+    platform: &dyn Platform,
+    item_center_y: f32,
+    open_left: bool,
+) -> Option<egui::Pos2> {
+    let dock = platform.dock_rect()?;
+    let x = beside_x(dock.left(), dock.right(), open_left, TOOLTIP_WIDTH, 8.0);
+    let y = dock.top() + item_center_y - 18.0;
+    Some(egui::pos2(x, y.max(0.0)))
+}
+
+/// 子Viewportのツールチップ。表示中は位置を固定し、最初の20msは非表示にしてちらつきを防ぐ。
 pub(crate) fn directional_tooltip(
+    platform: &dyn Platform,
     response: &egui::Response,
     text: &str,
     alignment: egui::RectAlign,
 ) {
     let state_id = response.id.with("child-tooltip-state");
-    if response
+    let pointer_pressed = response
         .ctx
-        .input(|input| input.pointer.any_down() || input.pointer.any_click())
-    {
+        .input(|input| input.pointer.any_down() || input.pointer.any_click());
+    if pointer_pressed || !egui::Tooltip::should_show_tooltip(response, false) {
         response
             .ctx
             .data_mut(|data| data.remove::<(Instant, egui::Pos2)>(state_id));
         return;
     }
-    if !egui::Tooltip::should_show_tooltip(response, false) {
-        response
-            .ctx
-            .data_mut(|data| data.remove::<(Instant, egui::Pos2)>(state_id));
-        return;
-    }
-    let Some(initial_position) =
-        tooltip_screen_position(response, alignment == egui::RectAlign::LEFT)
-    else {
+    let Some(initial_position) = tooltip_screen_position(
+        platform,
+        response.rect.center().y,
+        alignment == egui::RectAlign::LEFT,
+    ) else {
         return;
     };
     let (opened_at, position) = response.ctx.data_mut(|data| {
-        if let Some(state) = data.get_temp::<(Instant, egui::Pos2)>(state_id) {
-            state
-        } else {
-            let state = (Instant::now(), initial_position);
-            data.insert_temp(state_id, state);
-            state
-        }
+        *data.get_temp_mut_or_insert_with(state_id, || (Instant::now(), initial_position))
     });
     let ready = opened_at.elapsed() >= Duration::from_millis(20);
     let tooltip_text = text.to_owned();
@@ -199,149 +161,47 @@ pub(crate) fn directional_tooltip(
     );
 }
 
-/// 横位置はDockの左右の端、縦位置はカーソルの高さを基準にする。
-/// Dockが見つからない場合はカーソル位置を基準にする。
-#[cfg(windows)]
-fn beside_dock_at_cursor(open_left: bool, width: f32) -> Option<egui::Pos2> {
-    use std::os::windows::ffi::OsStrExt;
-    use windows_sys::Win32::Foundation::{POINT, RECT};
-    use windows_sys::Win32::UI::WindowsAndMessaging::{FindWindowW, GetCursorPos, GetWindowRect};
-
-    let mut cursor = POINT::default();
-    if unsafe { GetCursorPos(&mut cursor) } == 0 {
-        return None;
-    }
-    let title: Vec<u16> = std::ffi::OsStr::new("Windows Side Dock")
-        .encode_wide()
-        .chain(Some(0))
-        .collect();
-    let window = unsafe { FindWindowW(std::ptr::null(), title.as_ptr()) };
-    let mut rect = RECT::default();
-    let (left, right) = if !window.is_null() && unsafe { GetWindowRect(window, &mut rect) } != 0 {
-        (rect.left as f32, rect.right as f32)
-    } else {
-        (cursor.x as f32, cursor.x as f32)
-    };
-    let x = beside_x(left, right, open_left, width, 8.0);
-    Some(egui::pos2(x, cursor.y as f32))
-}
-
-#[cfg(windows)]
-pub(crate) fn context_menu_screen_position(open_left: bool) -> Option<egui::Pos2> {
-    beside_dock_at_cursor(open_left, CONTEXT_MENU_WIDTH)
-}
-
-#[cfg(windows)]
-pub(crate) fn window_picker_screen_position(open_left: bool) -> Option<egui::Pos2> {
-    beside_dock_at_cursor(open_left, WINDOW_PICKER_WIDTH)
-}
-
-#[cfg(not(windows))]
-pub(crate) fn context_menu_screen_position(_open_left: bool) -> Option<egui::Pos2> {
-    Some(egui::pos2(100.0, 100.0))
-}
-
-#[cfg(not(windows))]
-pub(crate) fn window_picker_screen_position(_open_left: bool) -> Option<egui::Pos2> {
-    Some(egui::pos2(100.0, 100.0))
-}
-
-#[cfg(windows)]
-pub(crate) fn tooltip_screen_position(
-    response: &egui::Response,
-    open_left: bool,
-) -> Option<egui::Pos2> {
-    use std::os::windows::ffi::OsStrExt;
-    use windows_sys::Win32::Foundation::RECT;
-    use windows_sys::Win32::UI::WindowsAndMessaging::{FindWindowW, GetWindowRect};
-
-    let title: Vec<u16> = std::ffi::OsStr::new("Windows Side Dock")
-        .encode_wide()
-        .chain(Some(0))
-        .collect();
-    let window = unsafe { FindWindowW(std::ptr::null(), title.as_ptr()) };
-    let mut rect = RECT::default();
-    if window.is_null() || unsafe { GetWindowRect(window, &mut rect) } == 0 {
-        return None;
-    }
-    let x = beside_x(
-        rect.left as f32,
-        rect.right as f32,
-        open_left,
-        TOOLTIP_WIDTH,
-        8.0,
-    );
-    let y = rect.top as f32 + response.rect.center().y - 18.0;
-    Some(egui::pos2(x, y.max(0.0)))
-}
-
-#[cfg(not(windows))]
-pub(crate) fn tooltip_screen_position(
-    response: &egui::Response,
-    open_left: bool,
-) -> Option<egui::Pos2> {
-    let x = beside_x(
-        response.rect.left(),
-        response.rect.right(),
-        open_left,
-        TOOLTIP_WIDTH,
-        8.0,
-    );
-    Some(egui::pos2(x, response.rect.top()))
-}
-
-#[cfg(windows)]
-pub(crate) fn current_date_time() -> (String, String, String) {
-    use windows_sys::Win32::Foundation::SYSTEMTIME;
-    use windows_sys::Win32::System::SystemInformation::GetLocalTime;
-    let mut time = SYSTEMTIME::default();
-    unsafe { GetLocalTime(&mut time) };
-    let weekdays = ["日", "月", "火", "水", "木", "金", "土"];
+/// 時計に表示する日付、曜日、時刻。
+pub(crate) fn format_date_time(time: LocalTime) -> (String, String, String) {
+    const WEEKDAYS: [&str; 7] = ["日", "月", "火", "水", "木", "金", "土"];
+    let weekday = WEEKDAYS.get(usize::from(time.weekday)).unwrap_or(&"―");
     (
-        format!("{:02}/{:02}", time.wMonth, time.wDay),
-        format!("（{}）", weekdays[time.wDayOfWeek as usize]),
-        format!("{:02}:{:02}", time.wHour, time.wMinute),
+        format!("{:02}/{:02}", time.month, time.day),
+        format!("（{weekday}）"),
+        format!("{:02}:{:02}", time.hour, time.minute),
     )
 }
 
-#[cfg(not(windows))]
-pub(crate) fn current_date_time() -> (String, String, String) {
-    ("--/--".into(), "（―）".into(), "--:--".into())
-}
-
-#[cfg(windows)]
-pub(crate) fn dock_geometry() -> ([f32; 2], [f32; 2]) {
-    use windows_sys::Win32::Foundation::RECT;
-    use windows_sys::Win32::UI::WindowsAndMessaging::{SystemParametersInfoW, SPI_GETWORKAREA};
-    let mut area = RECT::default();
-    let ok = unsafe {
-        SystemParametersInfoW(
-            SPI_GETWORKAREA,
-            0,
-            &mut area as *mut _ as *mut std::ffi::c_void,
-            0,
-        )
+/// 起動時のDockの位置とサイズ。作業領域の右上に置き、高さは作業領域に収める。
+pub(crate) fn dock_geometry(work_area: Option<egui::Rect>) -> ([f32; 2], [f32; 2]) {
+    let Some(area) = work_area else {
+        return ([0.0, 60.0], [DOCK_WIDTH, DOCK_MAX_HEIGHT]);
     };
-    if ok != 0 {
-        let width = 54.0;
-        let height = 800.0_f32.min((area.bottom - area.top) as f32 - 24.0);
-        (
-            [area.right as f32 - width - 12.0, area.top as f32 + 12.0],
-            [width, height],
-        )
-    } else {
-        ([0.0, 60.0], [54.0, 800.0])
-    }
-}
-
-#[cfg(not(windows))]
-pub(crate) fn dock_geometry() -> ([f32; 2], [f32; 2]) {
-    ([0.0, 60.0], [54.0, 800.0])
+    let height = DOCK_MAX_HEIGHT.min(area.height() - DOCK_MARGIN * 2.0);
+    (
+        [
+            area.right() - DOCK_WIDTH - DOCK_MARGIN,
+            area.top() + DOCK_MARGIN,
+        ],
+        [DOCK_WIDTH, height],
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::platform::fake::FakePlatform;
+
+    fn dock_at(left: f32) -> FakePlatform {
+        FakePlatform {
+            dock: Some(egui::Rect::from_min_size(
+                egui::pos2(left, 12.0),
+                egui::vec2(54.0, 800.0),
+            )),
+            cursor: Some(egui::pos2(left + 27.0, 300.0)),
+            ..FakePlatform::default()
+        }
+    }
 
     #[test]
     fn places_popup_beside_anchor_without_overlap() {
@@ -358,9 +218,150 @@ mod tests {
     }
 
     #[test]
-    fn detects_which_half_of_screen_holds_the_dock() {
-        assert!(center_in_right_half(1854, 1908, 1920));
-        assert!(!center_in_right_half(12, 66, 1920));
-        assert!(!center_in_right_half(930, 990, 1920));
+    fn opens_toward_the_wider_side_of_the_screen() {
+        assert!(popup_should_open_left(&dock_at(1854.0)));
+        assert!(!popup_should_open_left(&dock_at(12.0)));
+        let missing = FakePlatform {
+            dock: None,
+            ..FakePlatform::default()
+        };
+        assert!(popup_should_open_left(&missing));
+    }
+
+    #[test]
+    fn honours_fixed_popup_direction() {
+        let right_dock = dock_at(1854.0);
+        let left_dock = dock_at(12.0);
+        assert_eq!(
+            popup_alignment(&right_dock, PopupDirection::Auto),
+            egui::RectAlign::LEFT
+        );
+        assert_eq!(
+            popup_alignment(&left_dock, PopupDirection::Auto),
+            egui::RectAlign::RIGHT
+        );
+        assert_eq!(
+            popup_alignment(&left_dock, PopupDirection::Left),
+            egui::RectAlign::LEFT
+        );
+        assert_eq!(
+            popup_alignment(&right_dock, PopupDirection::Right),
+            egui::RectAlign::RIGHT
+        );
+    }
+
+    #[test]
+    fn places_settings_dialog_next_to_the_dock() {
+        let platform = dock_at(1854.0);
+        assert_eq!(
+            settings_dialog_position(&platform, PopupDirection::Auto),
+            egui::pos2(1854.0 - SETTINGS_WIDTH - 12.0, 12.0)
+        );
+        assert_eq!(
+            settings_dialog_position(&platform, PopupDirection::Right),
+            egui::pos2(1920.0, 12.0)
+        );
+        let missing = FakePlatform {
+            dock: None,
+            ..FakePlatform::default()
+        };
+        assert_eq!(
+            settings_dialog_position(&missing, PopupDirection::Auto),
+            egui::pos2(100.0, 100.0)
+        );
+    }
+
+    #[test]
+    fn anchors_menus_to_the_dock_edge_at_cursor_height() {
+        let platform = dock_at(1854.0);
+        assert_eq!(
+            context_menu_screen_position(&platform, true),
+            Some(egui::pos2(1854.0 - CONTEXT_MENU_WIDTH - 8.0, 300.0))
+        );
+        assert_eq!(
+            window_picker_screen_position(&platform, false),
+            Some(egui::pos2(1916.0, 300.0))
+        );
+    }
+
+    #[test]
+    fn falls_back_to_cursor_without_dock_and_gives_up_without_cursor() {
+        let no_dock = FakePlatform {
+            dock: None,
+            cursor: Some(egui::pos2(500.0, 40.0)),
+            ..FakePlatform::default()
+        };
+        assert_eq!(
+            context_menu_screen_position(&no_dock, false),
+            Some(egui::pos2(508.0, 40.0))
+        );
+        let no_cursor = FakePlatform {
+            cursor: None,
+            ..FakePlatform::default()
+        };
+        assert_eq!(window_picker_screen_position(&no_cursor, true), None);
+    }
+
+    #[test]
+    fn positions_tooltip_outside_the_dock_and_on_screen() {
+        let platform = dock_at(1854.0);
+        assert_eq!(
+            tooltip_screen_position(&platform, 100.0, true),
+            Some(egui::pos2(1854.0 - TOOLTIP_WIDTH - 8.0, 94.0))
+        );
+        assert_eq!(
+            tooltip_screen_position(&platform, 0.0, false),
+            Some(egui::pos2(1916.0, 0.0))
+        );
+        let missing = FakePlatform {
+            dock: None,
+            ..FakePlatform::default()
+        };
+        assert_eq!(tooltip_screen_position(&missing, 10.0, true), None);
+    }
+
+    #[test]
+    fn reports_dock_origin() {
+        assert_eq!(
+            launcher_window_position(&dock_at(100.0)),
+            Some(egui::pos2(100.0, 12.0))
+        );
+    }
+
+    #[test]
+    fn formats_clock_text() {
+        let time = LocalTime {
+            month: 9,
+            day: 3,
+            weekday: 6,
+            hour: 7,
+            minute: 5,
+        };
+        assert_eq!(
+            format_date_time(time),
+            ("09/03".into(), "（土）".into(), "07:05".into())
+        );
+        let invalid = LocalTime { weekday: 9, ..time };
+        assert_eq!(format_date_time(invalid).1, "（―）");
+    }
+
+    #[test]
+    fn fits_dock_into_the_work_area() {
+        let full_hd = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1920.0, 1032.0));
+        assert_eq!(
+            dock_geometry(Some(full_hd)),
+            ([1854.0, 12.0], [54.0, 800.0])
+        );
+        let short = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1280.0, 600.0));
+        assert_eq!(dock_geometry(Some(short)), ([1214.0, 12.0], [54.0, 576.0]));
+        assert_eq!(dock_geometry(None), ([0.0, 60.0], [54.0, 800.0]));
+        let platform = FakePlatform {
+            work_area: Some(full_hd),
+            ..FakePlatform::default()
+        };
+        assert_eq!(
+            dock_geometry(platform.work_area()),
+            ([1854.0, 12.0], [54.0, 800.0])
+        );
     }
 }
