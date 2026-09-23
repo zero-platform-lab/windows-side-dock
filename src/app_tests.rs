@@ -10,17 +10,20 @@ struct Fixture {
     root: PathBuf,
 }
 
-/// 0.1.21から更新した状態（標準アイコンだった4つを引き継ぐ）で始める。
+/// エクスプローラー・ターミナル・メモ帳・Windows 設定の4つをピン留めした状態で始める。
 fn fixture(test: &str, platform: FakePlatform) -> Fixture {
     let root = temp_root(test);
     std::fs::create_dir_all(root.join("windows-side-dock")).unwrap();
-    std::fs::write(root.join("windows-side-dock").join("items.txt"), "").unwrap();
+    std::fs::write(
+        root.join("windows-side-dock").join("pinned.txt"),
+        crate::config::FOUR_PINS,
+    )
+    .unwrap();
     let platform = Rc::new(platform);
     let app = LauncherApp::new(
         platform.clone(),
         ConfigStore::new(Some(root.clone())),
         r"C:\Windows",
-        r"C:\Local",
     );
     Fixture {
         app,
@@ -48,12 +51,7 @@ fn existing_file(root: &Path) -> String {
 fn starts_with_explorer_and_settings_on_first_run() {
     let root = temp_root("app-first-run");
     let config = ConfigStore::new(Some(root.clone()));
-    let app = LauncherApp::new(
-        Rc::new(FakePlatform::default()),
-        config,
-        r"C:\Windows",
-        r"C:\Local",
-    );
+    let app = LauncherApp::new(Rc::new(FakePlatform::default()), config, r"C:\Windows");
     let commands: Vec<_> = app.items.iter().map(|item| item.command.as_str()).collect();
     assert_eq!(commands, [r"C:\Windows\explorer.exe", "ms-settings:"]);
     assert_eq!(app.items[1].fallback_icon, IconKind::Settings);
@@ -65,22 +63,17 @@ fn keeps_saved_pins_even_when_every_pin_was_removed() {
     let root = temp_root("app-saved-pins");
     let config = ConfigStore::new(Some(root.clone()));
     config.save_pinned_items(std::iter::empty());
-    let app = LauncherApp::new(
-        Rc::new(FakePlatform::default()),
-        config,
-        r"C:\Windows",
-        r"C:\Local",
-    );
+    let app = LauncherApp::new(Rc::new(FakePlatform::default()), config, r"C:\Windows");
     assert!(app.items.is_empty());
 }
 
 #[test]
-fn carries_over_the_former_builtin_icons_and_old_pins_without_duplicates() {
+fn carries_over_old_pins_after_explorer_and_settings_without_duplicates() {
     let root = temp_root("app-start");
     std::fs::create_dir_all(root.join("windows-side-dock")).unwrap();
     std::fs::write(
         root.join("windows-side-dock").join("items.txt"),
-        "Code|C:\\Apps\\Code.exe\nメモ帳|C:\\Windows\\System32\\notepad.exe",
+        "Code|C:\\Apps\\Code.exe\nWindows 設定|ms-settings:\nメモ帳|C:\\Windows\\System32\\notepad.exe",
     )
     .unwrap();
     let config = ConfigStore::new(Some(root.clone()));
@@ -93,21 +86,20 @@ fn carries_over_the_former_builtin_icons_and_old_pins_without_duplicates() {
         ],
         ..FakePlatform::default()
     });
-    let app = LauncherApp::new(platform.clone(), config, r"C:\Windows", r"C:\Local");
+    let app = LauncherApp::new(platform.clone(), config, r"C:\Windows");
 
     let commands: Vec<_> = app.items.iter().map(|item| item.command.as_str()).collect();
     assert_eq!(
         commands,
         [
             r"C:\Windows\explorer.exe",
-            r"C:\Local\Microsoft\WindowsApps\wt.exe",
-            r"C:\Windows\System32\notepad.exe",
             "ms-settings:",
             r"C:\Apps\Code.exe",
+            r"C:\Windows\System32\notepad.exe",
         ]
     );
     assert!(app.items.iter().all(|item| item.icon.is_some()));
-    assert_eq!(app.config.load_pinned_items().unwrap().len(), 5);
+    assert_eq!(app.config.load_pinned_items().unwrap().len(), 4);
     assert_eq!(app.process_tool, ProcessTool::ProcessExplorer);
     assert_eq!(
         platform.registry_values.borrow().values().next().unwrap(),

@@ -86,7 +86,6 @@ fn main() -> eframe::Result {
         ..Default::default()
     };
     let windows_dir = std::env::var("WINDIR").unwrap_or_else(|_| r"C:\Windows".into());
-    let local_app_data = std::env::var("LOCALAPPDATA").unwrap_or_default();
     eframe::run_native(
         "Windows Side Dock",
         options,
@@ -94,12 +93,7 @@ fn main() -> eframe::Result {
             if let Some(fonts) = japanese_fonts(JAPANESE_FONT_PATH) {
                 cc.egui_ctx.set_fonts(fonts);
             }
-            let mut app = LauncherApp::new(
-                platform,
-                ConfigStore::from_env(),
-                &windows_dir,
-                &local_app_data,
-            );
+            let mut app = LauncherApp::new(platform, ConfigStore::from_env(), &windows_dir);
             app.tray = install_tray(&cc.egui_ctx, tray_actions);
             #[cfg(windows)]
             win32_events::watch_windows(&cc.egui_ctx);

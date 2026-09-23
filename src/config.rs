@@ -167,12 +167,14 @@ fn process_tool_value(tool: ProcessTool) -> &'static str {
     }
 }
 
-/// 0.1.21から更新した状態の設定。空の `items.txt` があるため、標準アイコンだった4つを引き継ぐ。
+/// テスト用に、エクスプローラー・ターミナル・メモ帳・Windows 設定の4つをピン留めした設定。
 #[cfg(test)]
-pub(crate) fn upgraded_store(test: &str) -> ConfigStore {
-    let root = temp_root(test);
-    let config = ConfigStore::new(Some(root));
-    config.write(ITEMS_FILE, "");
+pub(crate) const FOUR_PINS: &str = "ファイルエクスプローラー|C:\\Windows\\explorer.exe\nターミナル|C:\\Local\\Microsoft\\WindowsApps\\wt.exe\nメモ帳|C:\\Windows\\System32\\notepad.exe\nWindows 設定|ms-settings:";
+
+#[cfg(test)]
+pub(crate) fn four_pins_store(test: &str) -> ConfigStore {
+    let config = ConfigStore::new(Some(temp_root(test)));
+    config.write(PINNED_FILE, FOUR_PINS);
     config
 }
 

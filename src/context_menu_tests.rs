@@ -1,6 +1,6 @@
 use super::*;
 use crate::app::new_item;
-use crate::config::{temp_root, upgraded_store, DockSide};
+use crate::config::{four_pins_store, temp_root, DockSide};
 use crate::model::{IconKind, LauncherItem};
 use crate::platform::fake::FakePlatform;
 use egui_kittest::kittest::Queryable;
@@ -24,8 +24,8 @@ fn running_item(name: &str, handles: &[isize]) -> LauncherItem {
 
 fn app(test: &str, platform: FakePlatform) -> (LauncherApp, Rc<FakePlatform>) {
     let platform = Rc::new(platform);
-    let config = upgraded_store(test);
-    let mut app = LauncherApp::new(platform.clone(), config, r"C:\Windows", r"C:\Local");
+    let config = four_pins_store(test);
+    let mut app = LauncherApp::new(platform.clone(), config, r"C:\Windows");
     app.add_path(std::path::Path::new(r"C:\Apps\Code.exe"));
     app.running = vec![
         running_item("Chrome", &[21]),

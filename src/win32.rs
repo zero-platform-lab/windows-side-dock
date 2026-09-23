@@ -99,17 +99,30 @@ impl Platform for WindowsPlatform {
     fn visible_windows(&self) -> Vec<(isize, String, String)> {
         use windows_sys::core::BOOL;
         use windows_sys::Win32::Foundation::{CloseHandle, LPARAM};
+        use windows_sys::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_CLOAKED};
         use windows_sys::Win32::System::Threading::{
             GetCurrentProcessId, OpenProcess, QueryFullProcessImageNameW,
             PROCESS_QUERY_LIMITED_INFORMATION,
         };
         use windows_sys::Win32::UI::WindowsAndMessaging::{
-            EnumWindows, GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId,
-            IsWindowVisible,
+            EnumWindows, GetWindow, GetWindowLongW, GetWindowTextLengthW, GetWindowTextW,
+            GetWindowThreadProcessId, IsWindowVisible, GWL_EXSTYLE, GW_OWNER,
         };
 
         unsafe extern "system" fn enumerate(hwnd: HWND, parameter: LPARAM) -> BOOL {
             if IsWindowVisible(hwnd) == 0 || GetWindowTextLengthW(hwnd) == 0 {
+                return 1;
+            }
+            let ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE) as u32;
+            let has_owner = !GetWindow(hwnd, GW_OWNER).is_null();
+            let mut cloaked = 0_u32;
+            DwmGetWindowAttribute(
+                hwnd,
+                DWMWA_CLOAKED as u32,
+                (&mut cloaked as *mut u32).cast(),
+                std::mem::size_of::<u32>() as u32,
+            );
+            if !crate::model::is_app_window(ex_style, has_owner, cloaked != 0) {
                 return 1;
             }
             let mut process_id = 0;

@@ -50,6 +50,23 @@ pub(crate) fn same_application(pinned: &LauncherItem, running: &LauncherItem) ->
     running_name.chars().count() >= 4 && pinned_name.contains(&running_name)
 }
 
+/// タスクバーやAlt+Tabと同じ基準で、アプリのウィンドウかどうか。
+/// デスクトップ（Program Manager）やトレイのオーバーフローのようなツールウィンドウ、
+/// 別のウィンドウに付属するウィンドウ、隠されている（cloaked）ウィンドウは除く。
+/// ただし `WS_EX_APPWINDOW` を持つものはアプリ自身がタスクバーに出すよう求めているので含める。
+pub(crate) fn is_app_window(ex_style: u32, has_owner: bool, cloaked: bool) -> bool {
+    const WS_EX_TOOLWINDOW: u32 = 0x0000_0080;
+    const WS_EX_APPWINDOW: u32 = 0x0004_0000;
+    const WS_EX_NOACTIVATE: u32 = 0x0800_0000;
+    if cloaked {
+        return false;
+    }
+    if ex_style & WS_EX_APPWINDOW != 0 {
+        return true;
+    }
+    !has_owner && ex_style & (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE) == 0
+}
+
 pub(crate) fn friendly_window_name(title: &str, fallback: &str) -> String {
     title
         .rsplit_once(" - ")
@@ -276,6 +293,24 @@ mod tests {
             active,
             ..item(name, command)
         }
+    }
+
+    #[test]
+    fn keeps_only_windows_the_taskbar_would_show() {
+        // 実際に見つかったウィンドウの拡張スタイル。
+        let notepad = 0x110;
+        let program_manager = 0x200080;
+        let tray_overflow = 0x200088;
+        let nvidia_overlay = 0x8080080;
+        let process_explorer = 0x40100;
+        assert!(is_app_window(notepad, false, false));
+        assert!(!is_app_window(program_manager, false, false));
+        assert!(!is_app_window(tray_overflow, false, false));
+        assert!(!is_app_window(nvidia_overlay, false, false));
+        assert!(!is_app_window(notepad, true, false));
+        assert!(!is_app_window(notepad, false, true));
+        assert!(is_app_window(process_explorer, true, false));
+        assert!(!is_app_window(process_explorer, false, true));
     }
 
     #[test]

@@ -59,15 +59,10 @@ pub(crate) struct LauncherApp {
 }
 
 impl LauncherApp {
-    /// `windows_dir` は `%WINDIR%`、`local_app_data` は `%LOCALAPPDATA%`。最初に並べる項目のパスに使う。
-    pub(crate) fn new(
-        platform: Rc<dyn Platform>,
-        config: ConfigStore,
-        windows_dir: &str,
-        local_app_data: &str,
-    ) -> Self {
+    /// `windows_dir` は `%WINDIR%`。最初に並べる項目と代わりのアイコンのパスに使う。
+    pub(crate) fn new(platform: Rc<dyn Platform>, config: ConfigStore, windows_dir: &str) -> Self {
         config.migrate_legacy();
-        let items = initial_entries(&config, windows_dir, local_app_data)
+        let items = initial_entries(&config, windows_dir)
             .iter()
             .map(|(name, command)| pinned_item(platform.as_ref(), name, command, windows_dir))
             .collect();
@@ -280,40 +275,20 @@ impl LauncherApp {
     }
 }
 
-/// 保存してある項目、または初めての起動で並べる項目。
-/// 0.1.21以前は先頭の4つを標準アイコンとして保存していなかったため、引き継ぐときに補う。
-fn initial_entries(
-    config: &ConfigStore,
-    windows_dir: &str,
-    local_app_data: &str,
-) -> Vec<(String, String)> {
+/// 保存してある項目、または初めての起動で並べる項目（エクスプローラーとWindows 設定）。
+/// 0.1.21以前の `items.txt` があれば、その項目を2つの後ろに続けて引き継ぐ。
+fn initial_entries(config: &ConfigStore, windows_dir: &str) -> Vec<(String, String)> {
     if let Some(pinned) = config.load_pinned_items() {
         return pinned;
     }
-    let explorer = (
-        "ファイルエクスプローラー".to_owned(),
-        format!(r"{windows_dir}\explorer.exe"),
-    );
-    let settings = ("Windows 設定".to_owned(), "ms-settings:".to_owned());
-    let mut entries = match config.load_old_items() {
-        Some(old) => {
-            let mut entries = vec![
-                explorer,
-                (
-                    "ターミナル".to_owned(),
-                    format!(r"{local_app_data}\Microsoft\WindowsApps\wt.exe"),
-                ),
-                (
-                    "メモ帳".to_owned(),
-                    format!(r"{windows_dir}\System32\notepad.exe"),
-                ),
-                settings,
-            ];
-            entries.extend(old);
-            entries
-        }
-        None => vec![explorer, settings],
-    };
+    let mut entries = vec![
+        (
+            "ファイルエクスプローラー".to_owned(),
+            format!(r"{windows_dir}\explorer.exe"),
+        ),
+        ("Windows 設定".to_owned(), "ms-settings:".to_owned()),
+    ];
+    entries.extend(config.load_old_items().unwrap_or_default());
     let mut seen = Vec::new();
     entries.retain(|(_, command)| {
         let fresh = !seen.contains(command);

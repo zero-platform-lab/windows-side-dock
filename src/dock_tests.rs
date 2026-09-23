@@ -1,6 +1,6 @@
 use super::*;
 use crate::app::new_item;
-use crate::config::{temp_root, upgraded_store, DockSide};
+use crate::config::{four_pins_store, temp_root, DockSide};
 use crate::model::{LauncherItem, RunningWindow};
 use crate::platform::fake::FakePlatform;
 use egui_kittest::kittest::Queryable;
@@ -11,8 +11,8 @@ use std::time::Duration;
 
 fn app_with(platform: FakePlatform, test: &str) -> (LauncherApp, Rc<FakePlatform>) {
     let platform = Rc::new(platform);
-    let config = upgraded_store(test);
-    let app = LauncherApp::new(platform.clone(), config, r"C:\Windows", r"C:\Local");
+    let config = four_pins_store(test);
+    let app = LauncherApp::new(platform.clone(), config, r"C:\Windows");
     (app, platform)
 }
 

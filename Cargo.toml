@@ -1,6 +1,6 @@
 [package]
 name = "windows-side-dock"
-version = "0.1.22"
+version = "0.1.23"
 edition = "2021"
 
 [dependencies]
@@ -8,6 +8,7 @@ eframe = "0.33"
 tray-icon = "0.25"
 windows-sys = { version = "0.61", features = [
 	"Win32_Foundation",
+	"Win32_Graphics_Dwm",
 	"Win32_Graphics_Gdi",
 	"Win32_Storage_FileSystem",
 	"Win32_System_Threading",
