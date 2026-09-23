@@ -186,7 +186,7 @@ GitHub Releasesを使った自動更新はユーザー判断により対象外�
 
 - リポジトリ: `zero-platform-lab/windows-side-dock`（Public。組織の署名用Secretを使う条件）
 - `.github/workflows/release.yml`: `v*` タグで動く。exeをビルド・テスト → exeに署名 → 署名済みexeでMSIを作る → MSIに署名 → Releaseに出す
-- 署名は `zero-platform-lab/code-signing` の再利用ワークフロー `sign-windows.yml`（手順は同リポジトリの `docs/for-app-repos.md`）。自己署名の証明書（CN=Zero Platform Lab）なので、`signing.cer` を信頼ストアへ入れるまでは「不明な発行元」。SmartScreenの警告は署名では消えない
+- 署名は `zero-platform-lab/code-signing` の再利用ワークフロー `sign-windows.yml`（手順は同リポジトリの `docs/for-app-repos.md`）。呼び出しはコミットSHAで固定し（`@master` にしない）、Secretは3つを名前で渡す（`secrets: inherit` にしない）。code-signing を更新したら、差分を読んでから `release.yml` の2か所の `uses:` と公開証明書の `ref:` のSHAを上げる。自己署名の証明書（CN=Zero Platform Lab）なので、`signing.cer` を信頼ストアへ入れるまでは「不明な発行元」。SmartScreenの警告は署名では消えない
 - exeに先に署名するのは、MSIの中のexeまで署名済みにするため。MSIだけ署名すると、インストールされるexeは未署名になる
 - タグと `Cargo.toml` の版が違うとビルドで止まる。リリース手順: 版を上げてコミット → `git tag v<版>` → `git push origin main v<版>`
 - 組織Secret（`SIGNING_PFX_BASE64` `SIGNING_PFX_PASSWORD` `SIGNING_THUMBPRINT`）の対象にこのリポジトリを加える作業は、組織の管理者が行う

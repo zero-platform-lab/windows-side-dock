@@ -1,6 +1,7 @@
 # タグ（v*）を打つと、署名済みのexe・DLL・MSIXを入れたMSIを作り、MSIにも署名してReleaseに出す。
 # 手動で動かす（workflow_dispatch）と、Releaseは作らずに署名済みMSIを成果物として残す（試験用）。
 # 署名の中身は zero-platform-lab/code-signing 側にある（docs/for-app-repos.md）。
+# code-signing のワークフローと公開証明書は、同じコミット（SHA）で固定している。
 name: release
 
 on:
@@ -40,12 +41,18 @@ jobs:
   # ── exe・DLL・MSIX に署名する。MSIに入れる前に署名しないと、インストールされる側が未署名になる ──
   sign-exe:
     needs: build
-    uses: zero-platform-lab/code-signing/.github/workflows/sign-windows.yml@master
+    # 署名ワークフローはコミットで固定する。@master だと、code-signing 側の変更（悪意あるものを含む）が
+    # 秘密鍵を扱う処理にそのまま入る。更新するときは差分を読んでからSHAを上げる。
+    uses: zero-platform-lab/code-signing/.github/workflows/sign-windows.yml@fb01cf6eb3db81ed14984c26f4c8ea83d408b2a1 # master 2026-09-23
     with:
       artifact-name: exe-unsigned
       files: 'windows-side-dock.exe windows_side_dock_shell.dll windows-side-dock-shell.msix'
       signed-artifact-name: exe-signed
-    secrets: inherit
+    # 使う3つだけを渡す（secrets: inherit だと呼び出し元のSecretがすべて渡る）。
+    secrets:
+      SIGNING_PFX_BASE64: ${{ secrets.SIGNING_PFX_BASE64 }}
+      SIGNING_PFX_PASSWORD: ${{ secrets.SIGNING_PFX_PASSWORD }}
+      SIGNING_THUMBPRINT: ${{ secrets.SIGNING_THUMBPRINT }}
 
   # ── 署名済みの exe を入れて MSI を作る ──
   package:
@@ -73,12 +80,18 @@ jobs:
   # ── MSI に署名する ──
   sign-msi:
     needs: package
-    uses: zero-platform-lab/code-signing/.github/workflows/sign-windows.yml@master
+    # 署名ワークフローはコミットで固定する。@master だと、code-signing 側の変更（悪意あるものを含む）が
+    # 秘密鍵を扱う処理にそのまま入る。更新するときは差分を読んでからSHAを上げる。
+    uses: zero-platform-lab/code-signing/.github/workflows/sign-windows.yml@fb01cf6eb3db81ed14984c26f4c8ea83d408b2a1 # master 2026-09-23
     with:
       artifact-name: msi-unsigned
       files: '*.msi'
       signed-artifact-name: msi-signed
-    secrets: inherit
+    # 使う3つだけを渡す（secrets: inherit だと呼び出し元のSecretがすべて渡る）。
+    secrets:
+      SIGNING_PFX_BASE64: ${{ secrets.SIGNING_PFX_BASE64 }}
+      SIGNING_PFX_PASSWORD: ${{ secrets.SIGNING_PFX_PASSWORD }}
+      SIGNING_THUMBPRINT: ${{ secrets.SIGNING_THUMBPRINT }}
 
   # ── 署名済みの MSI を Release に出す（タグのときだけ） ──
   release:
@@ -95,10 +108,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: zero-platform-lab/code-signing
+          ref: fb01cf6eb3db81ed14984c26f4c8ea83d408b2a1
           path: cs
       - run: cp cs/public/signing.cer cs/public/THUMBPRINT.txt dist/
 
-      - uses: softprops/action-gh-release@v2
+      # Releaseへ書き込む権限を持つので、外部のアクションはコミットで固定する。
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           files: dist/*
           body_path: cs/public/RELEASE_NOTE_SNIPPET.md
