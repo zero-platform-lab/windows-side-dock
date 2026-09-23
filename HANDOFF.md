@@ -70,17 +70,19 @@ MSI生成:
 
 ## Windows右クリックメニュー
 
-2026-09-23時点で、ユーザー単位の次のレジストリへ手動登録済み。
+デスクトップおよびエクスプローラーの空白背景に「Windows Side Dock」サブメニューを追加している。登録先はユーザー単位の次のレジストリ。
 
 - `HKCU\Software\Classes\DesktopBackground\Shell\WindowsSideDock`
 - `HKCU\Software\Classes\Directory\Background\Shell\WindowsSideDock`
 
-デスクトップおよびエクスプローラーの空白背景に「Windows Side Dock」サブメニューを追加している。現在の登録内容は次の2項目。
+MSI（`installer\Package.wxs`）が登録・解除する項目は次の2つ。
 
-- Windows Side Dockの場所を開く
-- Process Explorer
+- `01Folder`: Windows Side Dockの場所を開く
+- `02TaskManager`: タスク マネージャー
 
-Windows 11では「その他のオプションを確認」側に表示される場合がある。現状、この登録処理はアプリのコードやインストーラーへ組み込まれていない。また、Process Explorerの設定変更時にレジストリは自動更新されない。
+Windows 11では「その他のオプションを確認」側に表示される場合がある。アプリ本体には登録処理がなく、Process Explorerの設定変更時にレジストリは自動更新されない。
+
+注意: 2026-09-23時点の実機には、MSI導入前に手動登録した `02ProcessTool`（Process Explorer、`E:\Downloads\ProcessExplorer\procexp.exe`）が残っており、MSIの `02TaskManager` と併存してメニューが3項目になっている。`02ProcessTool` はMSI管理外のため、アンインストールしても削除されない。
 
 ## 重要な実装上の注意
 
@@ -114,19 +116,20 @@ Windows 11では「その他のオプションを確認」側に表示される�
 
 - `model.rs`: `LauncherItem`、`RunningWindow`、各enum
 - `config.rs`: 設定と登録項目の永続化
-- `windows.rs`: Win32 API、Shell起動、ウィンドウ列挙、アイコン取得
+- `platform.rs`: Win32 API、Shell起動、ウィンドウ列挙、アイコン取得
 - `app.rs`: アプリ状態と操作
 - `dock.rs`: Dock本体と設定画面
 - `context_menu.rs`: 右クリックメニューとウィンドウ選択
+- `layout.rs`: 子Viewportの位置・サイズ計算
 - `ui.rs`: アイコン操作と項目生成
 - `theme.rs`: フォント、色、独自アイコン描画
 
 優先度が高い未完了事項:
 
 1. テスト追加とカバレッジ計測
-2. `main.rs` の段階的分割
-3. Windows背景メニューの登録／解除をアプリ設定へ統合
-4. Process Explorer切り替え時のWindows背景メニュー自動更新
+2. GitHub Releasesを使った更新確認・自動更新（前提としてGitHubリポジトリ作成とpushが必要。現在git remoteは未設定）
+3. Windows背景メニューをアプリ設定と連動させ、Process Explorer切り替え時に自動更新
+4. 手動登録の `02ProcessTool` とMSIの `02TaskManager` の重複を解消
 5. 設定保存先を `windows-side-dock` へ安全に移行
 
 ## インストールとアップグレード
@@ -150,6 +153,6 @@ Windows 11では「その他のオプションを確認」側に表示される�
 ## Gitと作業ツリー
 
 - 変更は小さく分けてコミットする方針
-- 直近の機能コミット: `37b9200 feat: add background context menu actions`
+- 直近の機能コミット: `c4f593a feat: restart dock after MSI upgrades`（以降はモジュール分割のリファクタリング）
 - `windows-side-dock-screenshot.png` はユーザー指示によりGitへ追加しない
 - 既存のユーザー変更を破棄する `git reset --hard` 等は使用しない
