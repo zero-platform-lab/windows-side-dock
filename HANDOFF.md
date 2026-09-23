@@ -180,6 +180,7 @@ GitHub Releasesを使った自動更新はユーザー判断により対象外�
 - exeに先に署名するのは、MSIの中のexeまで署名済みにするため。MSIだけ署名すると、インストールされるexeは未署名になる
 - タグと `Cargo.toml` の版が違うとビルドで止まる。リリース手順: 版を上げてコミット → `git tag v<版>` → `git push origin main v<版>`
 - 組織Secret（`SIGNING_PFX_BASE64` `SIGNING_PFX_PASSWORD` `SIGNING_THUMBPRINT`）の対象にこのリポジトリを加える作業は、組織の管理者が行う
+- 初回の署名付きリリースは `v0.1.26`（2026-09-23）。MSIと中のexeの両方が署名済みでタイムスタンプ付きなのを確認済み。この開発PCには `signing.cer` を `LocalMachine\Root` に登録済みで、署名の状態は `Valid` になる
 - 手元の `build-installer.ps1` は未署名のMSIを作る（開発用）。`-ExecutableDirectory` を渡すと、ビルドせずにそのフォルダーのexeをMSIへ入れる（CI用）
 
 0.1.0をインストール後に0.1.1を適用する実機アップグレードテスト済み。両方とも`msiexec`終了コード0。
