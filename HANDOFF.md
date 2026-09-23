@@ -127,10 +127,11 @@ Windows 11では「その他のオプションを確認」側に表示される�
 優先度が高い未完了事項:
 
 1. テスト追加とカバレッジ計測
-2. GitHub Releasesを使った更新確認・自動更新（前提としてGitHubリポジトリ作成とpushが必要。現在git remoteは未設定）
-3. Windows背景メニューをアプリ設定と連動させ、Process Explorer切り替え時に自動更新
-4. 手動登録の `02ProcessTool` とMSIの `02TaskManager` の重複を解消
-5. 設定保存先を `windows-side-dock` へ安全に移行
+2. Windows背景メニューをアプリ設定と連動させ、Process Explorer切り替え時に自動更新
+3. 手動登録の `02ProcessTool` とMSIの `02TaskManager` の重複を解消
+4. 設定保存先を `windows-side-dock` へ安全に移行
+
+GitHub Releasesを使った自動更新はユーザー判断により対象外（2026-09-23）。更新は新しいMSIを手動で実行する方式とする。
 
 ## インストールとアップグレード
 
