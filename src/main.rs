@@ -31,6 +31,7 @@ enum ProcessTool {
 #[derive(Clone, Copy)]
 enum ContextMenuTarget {
     Handle,
+    Clock,
     Pinned(usize),
     Running(usize),
 }
@@ -326,21 +327,26 @@ impl App for LauncherApp {
                 }
                 ui.vertical_centered(|ui| {
                     let (date, weekday, time) = current_date_time();
-                    ui.label(
-                        egui::RichText::new(date)
-                            .size(11.0)
-                            .color(Color32::from_rgb(225, 229, 238)),
-                    );
-                    ui.label(
-                        egui::RichText::new(weekday)
-                            .size(11.0)
-                            .color(Color32::from_rgb(225, 229, 238)),
-                    );
-                    ui.label(
-                        egui::RichText::new(time)
-                            .size(11.0)
-                            .color(Color32::from_rgb(225, 229, 238)),
-                    );
+                    let clock_response = ui
+                        .vertical_centered(|ui| {
+                            for text in [date, weekday, time] {
+                                ui.label(
+                                    egui::RichText::new(text)
+                                        .size(11.0)
+                                        .color(Color32::from_rgb(225, 229, 238)),
+                                );
+                            }
+                        })
+                        .response
+                        .interact(egui::Sense::click());
+                    if clock_response.secondary_clicked() {
+                        if let Some(position) = context_menu_screen_position(
+                            self.popup_direction.alignment(ctx) == egui::RectAlign::LEFT,
+                        ) {
+                            self.context_menu =
+                                Some((ContextMenuTarget::Clock, position, Instant::now()));
+                        }
+                    }
                     ui.add_space(3.0);
                     let (handle, drag) =
                         ui.allocate_exact_size(egui::vec2(40.0, 14.0), egui::Sense::drag());
@@ -665,19 +671,20 @@ impl LauncherApp {
             return;
         };
         let height = match target {
-            ContextMenuTarget::Handle => 98.0,
+            ContextMenuTarget::Handle => 54.0,
+            ContextMenuTarget::Clock => 54.0,
             ContextMenuTarget::Pinned(index) => {
                 if self
                     .items
                     .get(index)
                     .is_some_and(|item| !item.windows.is_empty())
                 {
-                    170.0
-                } else {
                     136.0
+                } else {
+                    102.0
                 }
             }
-            ContextMenuTarget::Running(_) => 136.0,
+            ContextMenuTarget::Running(_) => 102.0,
         };
         let mut close = false;
         ctx.show_viewport_immediate(
@@ -709,84 +716,83 @@ impl LauncherApp {
                             .corner_radius(8.0)
                             .inner_margin(egui::Margin::symmetric(8, 7)),
                     )
-                    .show(menu_ctx, |ui| {
-                        match target {
-                            ContextMenuTarget::Handle => {
-                                if ui.button("表示設定").clicked() {
-                                    self.show_settings = true;
-                                    close = true;
-                                }
+                    .show(menu_ctx, |ui| match target {
+                        ContextMenuTarget::Handle => {
+                            if ui.button("表示設定").clicked() {
+                                self.show_settings = true;
+                                close = true;
                             }
-                            ContextMenuTarget::Pinned(index) => {
-                                if index >= self.items.len() {
-                                    close = true;
-                                    return;
-                                }
-                                let is_running = !self.items[index].windows.is_empty();
-                                if ui
-                                    .button(if is_running {
-                                        "新しく起動"
-                                    } else {
-                                        "起動"
-                                    })
-                                    .clicked()
-                                {
-                                    self.launch(index);
-                                    close = true;
-                                }
-                                if is_running && ui.button("ウィンドウへ移動").clicked() {
-                                    let name = self.items[index].name.clone();
-                                    let windows = self.items[index].windows.clone();
-                                    self.open_or_activate_windows(name, windows, menu_ctx);
-                                    close = true;
-                                }
-                                ui.separator();
-                                if index >= 4 {
-                                    if ui.button("ピン留めを外す").clicked() {
-                                        self.items.remove(index);
-                                        self.selected =
-                                            self.selected.min(self.items.len().saturating_sub(1));
-                                        self.save_registered();
-                                        self.refresh_running();
-                                        close = true;
-                                    }
+                        }
+                        ContextMenuTarget::Clock => {
+                            let tool_label = match self.process_tool {
+                                ProcessTool::TaskManager => "タスク マネージャー",
+                                ProcessTool::ProcessExplorer => "Process Explorer",
+                            };
+                            let tool_ready = self.process_tool == ProcessTool::TaskManager
+                                || Path::new(self.process_explorer_path.trim()).is_file();
+                            if ui
+                                .add_enabled(tool_ready, egui::Button::new(tool_label))
+                                .clicked()
+                            {
+                                self.launch_process_tool();
+                                close = true;
+                            }
+                            if !tool_ready && ui.small_button("パスを設定…").clicked() {
+                                self.show_settings = true;
+                                close = true;
+                            }
+                        }
+                        ContextMenuTarget::Pinned(index) => {
+                            if index >= self.items.len() {
+                                close = true;
+                                return;
+                            }
+                            let is_running = !self.items[index].windows.is_empty();
+                            if ui
+                                .button(if is_running {
+                                    "新しく起動"
                                 } else {
-                                    ui.add_enabled(false, egui::Button::new("標準アイコン"));
-                                }
+                                    "起動"
+                                })
+                                .clicked()
+                            {
+                                self.launch(index);
+                                close = true;
                             }
-                            ContextMenuTarget::Running(index) => {
-                                if index >= self.running.len() {
+                            if is_running && ui.button("ウィンドウへ移動").clicked() {
+                                let name = self.items[index].name.clone();
+                                let windows = self.items[index].windows.clone();
+                                self.open_or_activate_windows(name, windows, menu_ctx);
+                                close = true;
+                            }
+                            ui.separator();
+                            if index >= 4 {
+                                if ui.button("ピン留めを外す").clicked() {
+                                    self.items.remove(index);
+                                    self.selected =
+                                        self.selected.min(self.items.len().saturating_sub(1));
+                                    self.save_registered();
+                                    self.refresh_running();
                                     close = true;
-                                    return;
                                 }
-                                if ui.button("ウィンドウへ移動").clicked() {
-                                    self.activate_running(index, menu_ctx);
-                                    close = true;
-                                }
-                                ui.separator();
-                                if ui.button("ピン留めする").clicked() {
-                                    self.pin_running(index);
-                                    close = true;
-                                }
+                            } else {
+                                ui.add_enabled(false, egui::Button::new("標準アイコン"));
                             }
                         }
-                        ui.separator();
-                        let tool_label = match self.process_tool {
-                            ProcessTool::TaskManager => "タスク マネージャー",
-                            ProcessTool::ProcessExplorer => "Process Explorer",
-                        };
-                        let tool_ready = self.process_tool == ProcessTool::TaskManager
-                            || Path::new(self.process_explorer_path.trim()).is_file();
-                        if ui
-                            .add_enabled(tool_ready, egui::Button::new(tool_label))
-                            .clicked()
-                        {
-                            self.launch_process_tool();
-                            close = true;
-                        }
-                        if !tool_ready && ui.small_button("パスを設定…").clicked() {
-                            self.show_settings = true;
-                            close = true;
+                        ContextMenuTarget::Running(index) => {
+                            if index >= self.running.len() {
+                                close = true;
+                                return;
+                            }
+                            if ui.button("ウィンドウへ移動").clicked() {
+                                self.activate_running(index, menu_ctx);
+                                close = true;
+                            }
+                            ui.separator();
+                            if ui.button("ピン留めする").clicked() {
+                                self.pin_running(index);
+                                close = true;
+                            }
                         }
                     });
                 if close {
