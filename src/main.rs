@@ -105,7 +105,7 @@ impl LauncherApp {
                     &format!(r"{windows}\System32\notepad.exe"),
                 ),
                 item(
-                    "設定",
+                    "Windows 設定",
                     "ms-settings:",
                     IconKind::Settings,
                     &format!(r"{windows}\ImmersiveControlPanel\SystemSettings.exe"),
@@ -405,7 +405,9 @@ impl App for LauncherApp {
                         self.show_settings = true;
                         ctx.request_repaint();
                     }
-                    ui.add_space(3.0);
+                    ui.add_space(5.0);
+                    ui.separator();
+                    ui.add_space(5.0);
                     for index in 0..self.items.len() {
                         self.icon_button(ui, ctx, index);
                     }
