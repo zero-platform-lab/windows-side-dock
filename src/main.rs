@@ -106,7 +106,7 @@ impl LauncherApp {
                 ),
                 item(
                     "設定",
-                    &format!(r"{windows}\ImmersiveControlPanel\SystemSettings.exe"),
+                    "ms-settings:",
                     IconKind::Settings,
                     &format!(r"{windows}\ImmersiveControlPanel\SystemSettings.exe"),
                 ),
