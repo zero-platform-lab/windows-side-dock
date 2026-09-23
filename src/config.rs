@@ -13,13 +13,44 @@ pub(crate) enum ProcessTool {
     ProcessExplorer,
 }
 
-/// 旧アプリ名との互換性のため、保存先フォルダーは `lancher` のまま使う。
+const CONFIG_DIR: &str = "windows-side-dock";
+/// アプリ名変更前（0.1.5以前）の保存先。移行元としてだけ読む。
+const LEGACY_CONFIG_DIR: &str = "lancher";
+const CONFIG_FILES: [&str; 4] = [
+    "items.txt",
+    "settings.txt",
+    "process_tool.txt",
+    "process_explorer_path.txt",
+];
+
 fn config_file_in(local_app_data: &Path, name: &str) -> PathBuf {
-    local_app_data.join("lancher").join(name)
+    local_app_data.join(CONFIG_DIR).join(name)
 }
 
-fn legacy_config_file(name: &str) -> Option<PathBuf> {
+fn config_file(name: &str) -> Option<PathBuf> {
     std::env::var_os("LOCALAPPDATA").map(|root| config_file_in(Path::new(&root), name))
+}
+
+/// 旧フォルダーの設定を新フォルダーへコピーする。新フォルダーに既にあるファイルは上書きしない。
+/// 旧フォルダーは戻せるように残し、失敗したファイルは次回起動時に再試行される。
+fn migrate_legacy_config_in(local_app_data: &Path) {
+    for name in CONFIG_FILES {
+        let target = config_file_in(local_app_data, name);
+        let source = local_app_data.join(LEGACY_CONFIG_DIR).join(name);
+        if target.exists() || !source.is_file() {
+            continue;
+        }
+        if let Some(parent) = target.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let _ = std::fs::copy(&source, &target);
+    }
+}
+
+pub(crate) fn migrate_legacy_config() {
+    if let Some(root) = std::env::var_os("LOCALAPPDATA") {
+        migrate_legacy_config_in(Path::new(&root));
+    }
 }
 
 fn read_setting(path: Option<PathBuf>) -> Option<String> {
@@ -35,7 +66,7 @@ fn write_setting(path: Option<PathBuf>, value: &str) {
 }
 
 fn config_path() -> Option<PathBuf> {
-    legacy_config_file("items.txt")
+    config_file("items.txt")
 }
 
 /// `items.txt` の各行 `名前|コマンド` を読み取る。区切りのない行は無視する。
@@ -63,7 +94,7 @@ pub(crate) fn save_registered_items<'a>(items: impl Iterator<Item = (&'a str, &'
 }
 
 fn settings_path() -> Option<PathBuf> {
-    legacy_config_file("settings.txt")
+    config_file("settings.txt")
 }
 
 fn parse_popup_direction(value: &str) -> PopupDirection {
@@ -92,11 +123,11 @@ pub(crate) fn save_popup_direction(direction: PopupDirection) {
 }
 
 fn process_tool_path() -> Option<PathBuf> {
-    legacy_config_file("process_tool.txt")
+    config_file("process_tool.txt")
 }
 
 fn process_explorer_path_file() -> Option<PathBuf> {
-    legacy_config_file("process_explorer_path.txt")
+    config_file("process_explorer_path.txt")
 }
 
 fn parse_process_tool(value: &str) -> ProcessTool {
@@ -212,12 +243,67 @@ mod tests {
     }
 
     #[test]
-    fn legacy_paths_remain_compatible() {
+    fn stores_settings_under_application_folder() {
         let root = Path::new(r"C:\Users\me\AppData\Local");
         assert_eq!(
             config_file_in(root, "items.txt"),
-            root.join("lancher").join("items.txt")
+            root.join("windows-side-dock").join("items.txt")
         );
+    }
+
+    fn temp_root(test: &str) -> PathBuf {
+        let root = std::env::temp_dir().join(format!("wsd-{test}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        root
+    }
+
+    #[test]
+    fn copies_legacy_settings_and_keeps_originals() {
+        let root = temp_root("migrate-copy");
+        let legacy = root.join("lancher");
+        std::fs::create_dir_all(&legacy).unwrap();
+        std::fs::write(legacy.join("items.txt"), "Code|C:\\Code.exe").unwrap();
+        std::fs::write(legacy.join("process_tool.txt"), "process_explorer").unwrap();
+        std::fs::write(legacy.join("unrelated.txt"), "x").unwrap();
+
+        migrate_legacy_config_in(&root);
+
+        let read = |name| std::fs::read_to_string(config_file_in(&root, name)).ok();
+        assert_eq!(read("items.txt").as_deref(), Some("Code|C:\\Code.exe"));
+        assert_eq!(
+            read("process_tool.txt").as_deref(),
+            Some("process_explorer")
+        );
+        assert_eq!(read("settings.txt"), None);
+        assert_eq!(read("unrelated.txt"), None);
+        assert!(legacy.join("items.txt").is_file());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn migration_never_overwrites_new_settings() {
+        let root = temp_root("migrate-keep");
+        std::fs::create_dir_all(root.join("lancher")).unwrap();
+        std::fs::write(root.join("lancher").join("settings.txt"), "left").unwrap();
+        write_setting(Some(config_file_in(&root, "settings.txt")), "right");
+
+        migrate_legacy_config_in(&root);
+        migrate_legacy_config_in(&root);
+
+        assert_eq!(
+            read_setting(Some(config_file_in(&root, "settings.txt"))).as_deref(),
+            Some("right")
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn migration_without_legacy_folder_creates_nothing() {
+        let root = temp_root("migrate-none");
+        std::fs::create_dir_all(&root).unwrap();
+        migrate_legacy_config_in(&root);
+        assert!(!root.join("windows-side-dock").exists());
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]
@@ -249,7 +335,7 @@ mod tests {
 
     #[test]
     fn writes_settings_into_missing_folders() {
-        let root = std::env::temp_dir().join(format!("wsd-config-test-{}", std::process::id()));
+        let root = temp_root("write-setting");
         let path = config_file_in(&root, "settings.txt");
         write_setting(Some(path.clone()), "left");
         assert_eq!(read_setting(Some(path)).as_deref(), Some("left"));

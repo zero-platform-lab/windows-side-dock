@@ -1,6 +1,6 @@
 use crate::config::{
     load_popup_direction, load_process_explorer_path, load_process_tool, load_registered_items,
-    save_registered_items, PopupDirection, ProcessTool,
+    migrate_legacy_config, save_registered_items, PopupDirection, ProcessTool,
 };
 use crate::layout::{popup_alignment, window_picker_screen_position};
 use crate::model::{
@@ -54,6 +54,7 @@ impl LauncherApp {
     pub(crate) fn new() -> Self {
         let windows = std::env::var("WINDIR").unwrap_or_else(|_| r"C:\Windows".into());
         let local = std::env::var("LOCALAPPDATA").unwrap_or_default();
+        migrate_legacy_config();
         let mut app = Self {
             items: vec![
                 item(
