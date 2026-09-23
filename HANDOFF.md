@@ -78,11 +78,13 @@ MSI生成:
 MSI（`installer\Package.wxs`）が登録・解除する項目は次の2つ。
 
 - `01Folder`: Windows Side Dockの場所を開く
-- `02TaskManager`: タスク マネージャー
+- `02ProcessTool`: プロセスツール（MSIの初期値はタスク マネージャー）
 
-Windows 11では「その他のオプションを確認」側に表示される場合がある。アプリ本体には登録処理がなく、Process Explorerの設定変更時にレジストリは自動更新されない。
+Dock本体（`src/shell_menu.rs`）が起動時と設定変更時に `02ProcessTool` の `MUIVerb` と `command` を書き換え、Dock設定のTask Manager／Process Explorerに合わせる。Process Explorerのパスが空ならタスク マネージャーに戻す。キーが存在しない（MSI未インストール）場合は何もしないため、開発ビルドを直接起動してもメニューは作られない。値の名前はMSIと同じなので、アンインストール時はMSIがまとめて削除する。
 
-注意: 2026-09-23時点の実機には、MSI導入前に手動登録した `02ProcessTool`（Process Explorer、`E:\Downloads\ProcessExplorer\procexp.exe`）が残っており、MSIの `02TaskManager` と併存してメニューが3項目になっている。`02ProcessTool` はMSI管理外のため、アンインストールしても削除されない。
+Windows 11では「その他のオプションを確認」側に表示される場合がある。
+
+0.1.4で旧 `02TaskManager` を廃止し、手動登録だった `02ProcessTool` をMSI管理下へ移した（メニュー3項目の重複を解消、実機確認済み）。
 
 ## 重要な実装上の注意
 
@@ -96,7 +98,7 @@ Windows 11では「その他のオプションを確認」側に表示される�
 
 ## テストとカバレッジ
 
-- 現在の自動テスト: 20件（`model.rs`、`config.rs`、`layout.rs`、`ui.rs`）
+- 現在の自動テスト: 23件（`model.rs`、`config.rs`、`layout.rs`、`ui.rs`、`shell_menu.rs`）
 - 全体行カバレッジ: 15.26%（`cargo llvm-cov --summary-only`）
 - `model.rs` 行カバレッジ: 100%
 - `config.rs` 行カバレッジ: 58.92%
@@ -120,15 +122,14 @@ Windows 11では「その他のオプションを確認」側に表示される�
 - `dock.rs`: Dock本体と設定画面
 - `context_menu.rs`: 右クリックメニューとウィンドウ選択
 - `layout.rs`: 子Viewportの位置・サイズ計算
+- `shell_menu.rs`: Windows背景メニューのプロセスツール項目の同期
 - `ui.rs`: アイコン操作と項目生成
 - `theme.rs`: フォント、色、独自アイコン描画
 
 優先度が高い未完了事項:
 
 1. `app.rs` の状態操作（登録・ピン留め・実行中判定）のテスト追加
-2. Windows背景メニューをアプリ設定と連動させ、Process Explorer切り替え時に自動更新
-3. 手動登録の `02ProcessTool` とMSIの `02TaskManager` の重複を解消
-4. 設定保存先を `windows-side-dock` へ安全に移行
+2. 設定保存先を `windows-side-dock` へ安全に移行
 
 GitHub Releasesを使った自動更新はユーザー判断により対象外（2026-09-23）。更新は新しいMSIを手動で実行する方式とする。
 
@@ -140,7 +141,8 @@ GitHub Releasesを使った自動更新はユーザー判断により対象外�
 - インストール先: `%LOCALAPPDATA%\Programs\Windows Side Dock`
 - Package ID: `ZeroPlatformLab.WindowsSideDock`（変更しないこと）
 - バージョン元: `Cargo.toml`
-- 現在のバージョン: `0.1.3`
+- 現在のバージョン: `0.1.4`
+- `build-installer.ps1` はUTF-8のため、Windows PowerShell 5.1ではなくPowerShell 7（`pwsh`）で実行すること
 - `MajorUpgrade`で旧版を置換し、ダウングレードを拒否
 - 同一バージョンの開発用再インストールを許可
 - ユーザー設定フォルダーはMSI管理対象外なのでアップグレード／アンインストールで保持
@@ -153,6 +155,6 @@ GitHub Releasesを使った自動更新はユーザー判断により対象外�
 ## Gitと作業ツリー
 
 - 変更は小さく分けてコミットする方針
-- 直近の機能コミット: `c4f593a feat: restart dock after MSI upgrades`（以降はモジュール分割のリファクタリング）
+- 直近の機能コミット: 背景メニューのプロセスツール同期（0.1.4）
 - `windows-side-dock-screenshot.png` はユーザー指示によりGitへ追加しない
 - 既存のユーザー変更を破棄する `git reset --hard` 等は使用しない
