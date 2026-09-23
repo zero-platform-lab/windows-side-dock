@@ -1,0 +1,92 @@
+# タグ（v*）を打つと、署名済みのexeを入れたMSIを作り、MSIにも署名してReleaseに出す。
+# 署名の中身は zero-platform-lab/code-signing 側にある（docs/for-app-repos.md）。
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write # Release の作成に要る
+
+jobs:
+  # ── exe のビルドとテスト ──
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: タグとCargo.tomlの版が一致するか確かめる
+        shell: pwsh
+        run: |
+          $version = [regex]::Match((Get-Content Cargo.toml -Raw), '(?m)^version\s*=\s*"([^"]+)"').Groups[1].Value
+          if ("v$version" -ne '${{ github.ref_name }}') { throw "タグ ${{ github.ref_name }} と Cargo.toml の版 $version が違う" }
+      - run: cargo test --release
+      - run: cargo build --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exe-unsigned
+          path: target/release/windows-side-dock.exe
+          if-no-files-found: error
+
+  # ── exe に署名する。MSIに入れる前に署名しないと、インストールされるexeが未署名になる ──
+  sign-exe:
+    needs: build
+    uses: zero-platform-lab/code-signing/.github/workflows/sign-windows.yml@master
+    with:
+      artifact-name: exe-unsigned
+      files: 'windows-side-dock.exe'
+      signed-artifact-name: exe-signed
+    secrets: inherit
+
+  # ── 署名済みの exe を入れて MSI を作る ──
+  package:
+    needs: sign-exe
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: exe-signed
+          path: signed
+      - name: WiX を入れる
+        run: dotnet tool install --global wix --version 6.0.2
+      - name: MSI を作る
+        shell: pwsh
+        run: ./scripts/build-installer.ps1 -ExecutableDirectory signed
+      - uses: actions/upload-artifact@v4
+        with:
+          name: msi-unsigned
+          path: dist/*.msi
+          if-no-files-found: error
+
+  # ── MSI に署名する ──
+  sign-msi:
+    needs: package
+    uses: zero-platform-lab/code-signing/.github/workflows/sign-windows.yml@master
+    with:
+      artifact-name: msi-unsigned
+      files: '*.msi'
+      signed-artifact-name: msi-signed
+    secrets: inherit
+
+  # ── 署名済みの MSI を Release に出す ──
+  release:
+    needs: sign-msi
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: msi-signed
+          path: dist
+
+      # 利用者が検証するための公開証明書と手順を同梱する
+      - uses: actions/checkout@v4
+        with:
+          repository: zero-platform-lab/code-signing
+          path: cs
+      - run: cp cs/public/signing.cer cs/public/THUMBPRINT.txt dist/
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          body_path: cs/public/RELEASE_NOTE_SNIPPET.md

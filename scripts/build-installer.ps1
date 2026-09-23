@@ -1,6 +1,8 @@
 [CmdletBinding()]
 param(
-    [string]$Configuration = "release"
+    [string]$Configuration = "release",
+    # 署名済みの windows-side-dock.exe があるフォルダー。指定するとビルドせずにこれをMSIへ入れる（CI用）。
+    [string]$ExecutableDirectory
 )
 
 $ErrorActionPreference = "Stop"
@@ -13,16 +15,19 @@ if (-not $versionMatch.Success) {
 }
 
 $version = $versionMatch.Groups['version'].Value
-$cargoArguments = @("build")
-if ($Configuration -eq "release") {
-    $cargoArguments += "--release"
+if ($ExecutableDirectory) {
+    $sourceDirectory = (Resolve-Path -LiteralPath $ExecutableDirectory).Path
+} else {
+    $cargoArguments = @("build")
+    if ($Configuration -eq "release") {
+        $cargoArguments += "--release"
+    }
+    & cargo @cargoArguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "cargo build に失敗しました。"
+    }
+    $sourceDirectory = Join-Path $projectRoot "target\$Configuration"
 }
-& cargo @cargoArguments
-if ($LASTEXITCODE -ne 0) {
-    throw "cargo build に失敗しました。"
-}
-
-$sourceDirectory = Join-Path $projectRoot "target\$Configuration"
 $executable = Join-Path $sourceDirectory "windows-side-dock.exe"
 if (-not (Test-Path -LiteralPath $executable)) {
     throw "実行ファイルが見つかりません: $executable"

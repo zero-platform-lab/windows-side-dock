@@ -152,7 +152,7 @@ Windows 11では「その他のオプションを確認」側に表示される�
 
 優先度が高い未完了事項:
 
-1. Windows 11の新しい（短縮版の）右クリックメニューへの登録。IExplorerCommandを実装したシェル拡張DLLと、パッケージIDを付けるスパースMSIXパッケージが必要で、MSIXには署名が要る（自己署名＋この PC の TrustedPeople への登録、またはGitHub Actions＋Azure Trusted Signing）。ユーザー判断で後回し（2026-09-23）。
+1. Windows 11の新しい（短縮版の）右クリックメニューへの登録。IExplorerCommandを実装したシェル拡張DLLと、パッケージIDを付けるスパースMSIXパッケージが必要。MSIXの署名は、署名付きリリースの仕組み（下記）で賄える見込み（`sign-windows.yml` はMSIXに対応。証明書をこのPCの信頼ストアへ登録する必要がある）。DLLとMSIXの作成は未着手。
 
 GitHub Releasesを使った自動更新はユーザー判断により対象外（2026-09-23）。更新は新しいMSIを手動で実行する方式とする。
 
@@ -171,6 +171,16 @@ GitHub Releasesを使った自動更新はユーザー判断により対象外�
 - ユーザー設定フォルダーはMSI管理対象外なのでアップグレード／アンインストールで保持
 - デスクトップとフォルダー背景の右クリックメニューはMSIが登録・解除
 - 新規インストール／アップグレード完了後にアプリを自動起動
+
+## 署名付きリリース（GitHub Actions）
+
+- リポジトリ: `zero-platform-lab/windows-side-dock`（Public。組織の署名用Secretを使う条件）
+- `.github/workflows/release.yml`: `v*` タグで動く。exeをビルド・テスト → exeに署名 → 署名済みexeでMSIを作る → MSIに署名 → Releaseに出す
+- 署名は `zero-platform-lab/code-signing` の再利用ワークフロー `sign-windows.yml`（手順は同リポジトリの `docs/for-app-repos.md`）。自己署名の証明書（CN=Zero Platform Lab）なので、`signing.cer` を信頼ストアへ入れるまでは「不明な発行元」。SmartScreenの警告は署名では消えない
+- exeに先に署名するのは、MSIの中のexeまで署名済みにするため。MSIだけ署名すると、インストールされるexeは未署名になる
+- タグと `Cargo.toml` の版が違うとビルドで止まる。リリース手順: 版を上げてコミット → `git tag v<版>` → `git push origin main v<版>`
+- 組織Secret（`SIGNING_PFX_BASE64` `SIGNING_PFX_PASSWORD` `SIGNING_THUMBPRINT`）の対象にこのリポジトリを加える作業は、組織の管理者が行う
+- 手元の `build-installer.ps1` は未署名のMSIを作る（開発用）。`-ExecutableDirectory` を渡すと、ビルドせずにそのフォルダーのexeをMSIへ入れる（CI用）
 
 0.1.0をインストール後に0.1.1を適用する実機アップグレードテスト済み。両方とも`msiexec`終了コード0。
 さらに、起動中の0.1.1へ0.1.2を適用し、既存プロセス2個が終了して新プロセス1個が自動起動することを確認済み。
