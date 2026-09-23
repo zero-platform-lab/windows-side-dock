@@ -380,31 +380,32 @@ fn menu_closes_on_escape_and_on_focus_loss() {
     assert!(harness.state().context_menu.is_none());
 
     open_menu(harness.state_mut(), ContextMenuTarget::Clock);
+    set_focus(&mut harness, true);
+    harness.step();
+    assert!(harness.state().context_menu.is_some());
+    set_focus(&mut harness, false);
+    harness.step();
+    assert!(harness.state().context_menu.is_none());
+    assert!(!harness.state().context_menu_focused);
+}
+
+fn set_focus(harness: &mut Harness<'static, LauncherApp>, focused: bool) {
     harness
         .input_mut()
         .viewports
         .entry(egui::ViewportId::ROOT)
         .or_default()
-        .focused = Some(false);
-    harness.step();
-    assert!(harness.state().context_menu.is_none());
+        .focused = Some(focused);
 }
 
 #[test]
-fn menu_ignores_focus_loss_right_after_opening() {
+fn menu_stays_open_until_it_has_had_focus() {
     let (mut app, _platform) = app("menu-grace", FakePlatform::default());
-    app.context_menu = Some((
-        ContextMenuTarget::Clock,
-        egui::pos2(0.0, 0.0),
-        Instant::now(),
-    ));
+    // 開いてから時間がたっていても、まだフォーカスを受け取っていなければ閉じない。
+    open_menu(&mut app, ContextMenuTarget::Clock);
     let mut harness = harness(app);
-    harness
-        .input_mut()
-        .viewports
-        .entry(egui::ViewportId::ROOT)
-        .or_default()
-        .focused = Some(false);
+    set_focus(&mut harness, false);
+    harness.step();
     harness.step();
     assert!(harness.state().context_menu.is_some());
 }

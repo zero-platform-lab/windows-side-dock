@@ -47,6 +47,8 @@ pub(crate) struct LauncherApp {
     pub(crate) context_menu: Option<(ContextMenuTarget, egui::Pos2, Instant)>,
     /// 開いている右クリックメニューの中身の大きさ。開いた直後の非表示フレームで測る。
     pub(crate) context_menu_size: Option<egui::Vec2>,
+    /// 開いている右クリックメニューが一度でもフォーカスを受け取ったか。
+    pub(crate) context_menu_focused: bool,
     pub(crate) window_picker: Option<(String, Vec<RunningWindow>, egui::Pos2)>,
     pub(crate) confirm_close_all: bool,
     pub(crate) process_tool: ProcessTool,
@@ -82,6 +84,7 @@ impl LauncherApp {
             applied_collapsed: None,
             context_menu: None,
             context_menu_size: None,
+            context_menu_focused: false,
             window_picker: None,
             confirm_close_all: false,
             process_tool: config.load_process_tool(),
@@ -195,6 +198,7 @@ impl LauncherApp {
         {
             self.context_menu = Some((target, position, Instant::now()));
             self.context_menu_size = None;
+            self.context_menu_focused = false;
             self.confirm_close_all = false;
         }
     }

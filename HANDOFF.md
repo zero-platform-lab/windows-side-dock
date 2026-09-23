@@ -66,7 +66,7 @@ MSI生成:
 - Dockの空白背景: Windows Side Dockの場所、プロセスツール、Dock設定
 - 設定の歯車: Dockの空白背景と同じメニュー
 
-右クリックメニューとツールチップは、親Viewport内へ制限されないよう子Viewportで実装している。この方針は過去のユーザー判断によるものなので、egui標準Popupへ安易に戻さないこと。
+右クリックメニューとツールチップは、親Viewport内へ制限されないよう子Viewportで実装している。右クリックメニューは「一度フォーカスを受け取ってから失ったとき」だけ閉じる（`context_menu_focused`）。以前は開いてから200ms後にフォーカスがなければ閉じていたため、ウィンドウ作成に時間がかかる起動直後の最初のメニューがすぐ消えていた。この方針は過去のユーザー判断によるものなので、egui標準Popupへ安易に戻さないこと。
 
 ## 設定ファイル
 
@@ -164,7 +164,7 @@ GitHub Releasesを使った自動更新はユーザー判断により対象外�
 - インストール先: `%LOCALAPPDATA%\Programs\Windows Side Dock`
 - Package ID: `ZeroPlatformLab.WindowsSideDock`（変更しないこと）
 - バージョン元: `Cargo.toml`
-- 現在のバージョン: `0.1.24`
+- 現在のバージョン: `0.1.25`
 - `build-installer.ps1` はUTF-8のため、Windows PowerShell 5.1ではなくPowerShell 7（`pwsh`）で実行すること
 - `MajorUpgrade`で旧版を置換し、ダウングレードを拒否
 - 同一バージョンの開発用再インストールを許可

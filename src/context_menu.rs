@@ -12,8 +12,6 @@ use std::time::Duration;
 const WINDOW_MENU_WIDTH: f32 = 430.0;
 /// 開いた直後の未描画フレームを隠す時間。子Viewportのちらつき対策。
 pub(crate) const MENU_REVEAL_DELAY: Duration = Duration::from_millis(16);
-/// 開いた直後のフォーカス移動では閉じないようにする猶予。
-const MENU_FOCUS_GRACE: Duration = Duration::from_millis(200);
 
 /// メニュー枠の内側の余白と枠線を合わせた、中身の大きさに足す分。
 const MENU_CHROME: egui::Vec2 = egui::vec2(8.0 * 2.0 + 2.0, 7.0 * 2.0 + 2.0);
@@ -287,8 +285,11 @@ impl LauncherApp {
                 if !revealed {
                     menu_ctx.request_repaint_after(MENU_REVEAL_DELAY);
                 }
-                let lost_focus = opened_at.elapsed() > MENU_FOCUS_GRACE
-                    && menu_ctx.input(|input| input.viewport().focused == Some(false));
+                // 一度フォーカスを受け取ってから失ったときだけ閉じる。起動直後の最初のメニューは
+                // ウィンドウの作成に時間がかかり、フォーカスを受け取る前に閉じてしまっていた。
+                let focused = menu_ctx.input(|input| input.viewport().focused);
+                self.context_menu_focused |= focused == Some(true);
+                let lost_focus = self.context_menu_focused && focused == Some(false);
                 close = close_requested(menu_ctx) || lost_focus;
                 egui::CentralPanel::default()
                     .frame(
@@ -323,6 +324,7 @@ impl LauncherApp {
         if close {
             self.context_menu = None;
             self.context_menu_size = None;
+            self.context_menu_focused = false;
             self.confirm_close_all = false;
         }
     }
