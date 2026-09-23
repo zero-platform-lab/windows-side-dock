@@ -3580,7 +3580,7 @@ dependencies = [
 
 [[package]]
 name = "windows-side-dock"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "eframe",
  "egui_kittest",

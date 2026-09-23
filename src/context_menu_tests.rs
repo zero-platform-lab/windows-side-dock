@@ -402,3 +402,27 @@ fn window_picker_closes_when_its_window_is_closed() {
     harness.step();
     assert!(harness.state().window_picker.is_none());
 }
+
+#[test]
+fn fits_menu_to_its_contents_before_showing_it() {
+    let (mut app, _platform) = app("menu-fit", FakePlatform::default());
+    open_menu(&mut app, ContextMenuTarget::Clock);
+    let mut harness = harness(app);
+    harness.step();
+    let size = harness.state().context_menu_size.unwrap();
+    assert!(size.x < CONTEXT_MENU_WIDTH && size.y < 54.0);
+    harness.step();
+    assert_eq!(harness.state().context_menu_size, Some(size));
+}
+
+#[test]
+fn limits_menu_height_and_keeps_long_window_lists_scrollable() {
+    let (mut app, platform) = app("menu-tall", FakePlatform::default());
+    app.items[4].windows = (1..=20).map(window).collect();
+    open_menu(&mut app, ContextMenuTarget::Pinned(4));
+    let mut harness = harness(app);
+    harness.step();
+    assert!(harness.state().context_menu_size.unwrap().y <= 420.0);
+    click(&mut harness, "window 1");
+    assert_eq!(platform.calls(), ["foreground 1"]);
+}

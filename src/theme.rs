@@ -5,11 +5,21 @@ pub(crate) fn draw_icon(painter: &egui::Painter, rect: egui::Rect, icon: IconKin
     draw_icon_colored(painter, rect, icon, Color32::from_rgb(238, 242, 250));
 }
 
+/// 左寄せの文字を持つ横長ボタン。通常は利用可能な幅いっぱいに広がり、
+/// 寸法を測るパスでは文字に合わせた幅を返してメニューが必要以上に広がらないようにする。
 pub(crate) fn left_aligned_button(ui: &mut egui::Ui, text: &str, height: f32) -> egui::Response {
-    let (rect, response) = ui.allocate_exact_size(
-        egui::vec2(ui.available_width(), height),
-        egui::Sense::click(),
-    );
+    let font = egui::TextStyle::Button.resolve(ui.style());
+    let width = if ui.is_sizing_pass() {
+        let text_width = ui
+            .painter()
+            .layout_no_wrap(text.to_owned(), font.clone(), Color32::WHITE)
+            .size()
+            .x;
+        (text_width + 18.0).min(ui.available_width())
+    } else {
+        ui.available_width()
+    };
+    let (rect, response) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::click());
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, text));
     let visuals = ui.style().interact(&response);
     ui.painter().rect(
@@ -23,7 +33,7 @@ pub(crate) fn left_aligned_button(ui: &mut egui::Ui, text: &str, height: f32) ->
         egui::pos2(rect.left() + 9.0, rect.center().y),
         egui::Align2::LEFT_CENTER,
         text,
-        egui::TextStyle::Button.resolve(ui.style()),
+        font,
         visuals.text_color(),
     );
     response

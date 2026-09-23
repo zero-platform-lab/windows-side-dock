@@ -14,7 +14,11 @@ pub(crate) const MENU_REVEAL_DELAY: Duration = Duration::from_millis(16);
 /// 開いた直後のフォーカス移動では閉じないようにする猶予。
 const MENU_FOCUS_GRACE: Duration = Duration::from_millis(200);
 
-/// 右クリックメニューの幅と高さ。`window_count` は対象アプリのウィンドウ数（対象が消えていれば `None`）。
+/// メニュー枠の内側の余白と枠線を合わせた、中身の大きさに足す分。
+const MENU_CHROME: egui::Vec2 = egui::vec2(8.0 * 2.0 + 2.0, 7.0 * 2.0 + 2.0);
+
+/// 右クリックメニューの中身を測るときの幅と、高さの上限。実際の大きさは中身に合わせる。
+/// `window_count` は対象アプリのウィンドウ数（対象が消えていれば `None`）。
 fn menu_size(target: ContextMenuTarget, window_count: Option<usize>) -> (f32, f32) {
     let (single, multiple_base) = match target {
         ContextMenuTarget::Handle => return (CONTEXT_MENU_WIDTH, 132.0),
@@ -206,15 +210,21 @@ impl LauncherApp {
         let Some((target, position, opened_at)) = self.context_menu else {
             return;
         };
-        let (width, height) = menu_size(target, self.target_window_count(target));
-        let position = menu_position(position, width, self.opens_left());
-        let revealed = opened_at.elapsed() >= MENU_REVEAL_DELAY;
+        let (max_width, max_height) = menu_size(target, self.target_window_count(target));
+        let measured = self.context_menu_size;
+        // 幅は中身に合わせ、高さだけ上限で抑える（それを超える分はウィンドウ一覧がスクロールする）。
+        let size = measured.map_or(egui::vec2(max_width, max_height), |size| {
+            egui::vec2(size.x, size.y.min(max_height))
+        });
+        let position = menu_position(position, size.x, self.opens_left());
+        // 中身を測り終え、最初の描画が済むまでは表示しない。
+        let revealed = measured.is_some() && opened_at.elapsed() >= MENU_REVEAL_DELAY;
         let mut close = false;
         ctx.show_viewport_immediate(
             egui::ViewportId::from_hash_of("launcher-context-menu"),
             egui::ViewportBuilder::default()
                 .with_title("Launcher menu")
-                .with_inner_size([width, height])
+                .with_inner_size(size)
                 .with_position(position)
                 .with_decorations(false)
                 .with_resizable(false)
@@ -239,7 +249,19 @@ impl LauncherApp {
                             .inner_margin(egui::Margin::symmetric(8, 7)),
                     )
                     .show(menu_ctx, |ui| {
-                        close |= self.context_menu_contents(ui, target, height);
+                        let builder = if measured.is_none() {
+                            egui::UiBuilder::new().sizing_pass()
+                        } else {
+                            egui::UiBuilder::new()
+                        };
+                        let contents = ui.scope_builder(builder, |ui| {
+                            self.context_menu_contents(ui, target, max_height)
+                        });
+                        if measured.is_none() {
+                            self.context_menu_size =
+                                Some(contents.response.rect.size() + MENU_CHROME);
+                        }
+                        close |= contents.inner;
                     });
                 if close {
                     menu_ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -250,6 +272,7 @@ impl LauncherApp {
         );
         if close {
             self.context_menu = None;
+            self.context_menu_size = None;
             self.confirm_close_all = false;
         }
     }
