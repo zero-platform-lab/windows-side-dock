@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [string]$Configuration = "release",
-    # 署名済みの windows-side-dock.exe があるフォルダー。指定するとビルドせずにこれをMSIへ入れる（CI用）。
+    # 署名済みの windows-side-dock.exe、windows_side_dock_shell.dll、windows-side-dock-shell.msix が
+    # あるフォルダー。指定するとビルドせずにこれらをMSIへ入れる（CI用）。
     [string]$ExecutableDirectory
 )
 
@@ -18,7 +19,7 @@ $version = $versionMatch.Groups['version'].Value
 if ($ExecutableDirectory) {
     $sourceDirectory = (Resolve-Path -LiteralPath $ExecutableDirectory).Path
 } else {
-    $cargoArguments = @("build")
+    $cargoArguments = @("build", "--workspace")
     if ($Configuration -eq "release") {
         $cargoArguments += "--release"
     }
@@ -27,6 +28,8 @@ if ($ExecutableDirectory) {
         throw "cargo build に失敗しました。"
     }
     $sourceDirectory = Join-Path $projectRoot "target\$Configuration"
+    # 手元のMSIXは未署名なので、このPCでは右クリックメニューを登録できない（インストールは続く）。
+    & (Join-Path $PSScriptRoot "build-sparse-package.ps1") -OutputPath (Join-Path $sourceDirectory "windows-side-dock-shell.msix") | Out-Null
 }
 $executable = Join-Path $sourceDirectory "windows-side-dock.exe"
 if (-not (Test-Path -LiteralPath $executable)) {
@@ -41,6 +44,7 @@ $packageSource = Join-Path $projectRoot "installer\Package.wxs"
 & wix build $packageSource `
     -d "Version=$version" `
     -d "SourceDir=$sourceDirectory" `
+    -ext WixToolset.Util.wixext `
     -arch x64 `
     -out $outputPath
 if ($LASTEXITCODE -ne 0) {

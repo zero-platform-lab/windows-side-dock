@@ -1,4 +1,4 @@
-"""Dockのアイコン（黒い角丸に銀のバー）を描き、assets/ に ico と RGBA を書き出す。
+"""Dockのアイコン（黒い角丸に銀のバー）を描き、assets/ に ico、RGBA、ロゴPNGを書き出す。
 
 使い方: python scripts/make-icon.py  （Pillowが必要）
 """
@@ -69,6 +69,9 @@ def main():
     images[-1].save(ASSETS / "icon-256.png")
     window = master.resize((WINDOW_ICON_SIZE, WINDOW_ICON_SIZE), Image.LANCZOS)
     (ASSETS / "icon-64.rgba").write_bytes(window.tobytes())
+    # 右クリックメニュー用スパースパッケージ（installer/sparse）のロゴ。
+    for size in (44, 150):
+        master.resize((size, size), Image.LANCZOS).save(ASSETS / f"logo-{size}.png")
 
 
 if __name__ == "__main__":

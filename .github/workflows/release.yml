@@ -1,10 +1,12 @@
-# タグ（v*）を打つと、署名済みのexeを入れたMSIを作り、MSIにも署名してReleaseに出す。
+# タグ（v*）を打つと、署名済みのexe・DLL・MSIXを入れたMSIを作り、MSIにも署名してReleaseに出す。
+# 手動で動かす（workflow_dispatch）と、Releaseは作らずに署名済みMSIを成果物として残す（試験用）。
 # 署名の中身は zero-platform-lab/code-signing 側にある（docs/for-app-repos.md）。
 name: release
 
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: write # Release の作成に要る
@@ -16,25 +18,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: タグとCargo.tomlの版が一致するか確かめる
+        if: startsWith(github.ref, 'refs/tags/')
         shell: pwsh
         run: |
           $version = [regex]::Match((Get-Content Cargo.toml -Raw), '(?m)^version\s*=\s*"([^"]+)"').Groups[1].Value
           if ("v$version" -ne '${{ github.ref_name }}') { throw "タグ ${{ github.ref_name }} と Cargo.toml の版 $version が違う" }
-      - run: cargo test --release
-      - run: cargo build --release
+      - run: cargo test --release --workspace
+      - run: cargo build --release --workspace
+      - name: 右クリックメニューのスパースパッケージ（MSIX）を作る
+        shell: pwsh
+        run: ./scripts/build-sparse-package.ps1 -OutputPath target/release/windows-side-dock-shell.msix
       - uses: actions/upload-artifact@v4
         with:
           name: exe-unsigned
-          path: target/release/windows-side-dock.exe
+          path: |
+            target/release/windows-side-dock.exe
+            target/release/windows_side_dock_shell.dll
+            target/release/windows-side-dock-shell.msix
           if-no-files-found: error
 
-  # ── exe に署名する。MSIに入れる前に署名しないと、インストールされるexeが未署名になる ──
+  # ── exe・DLL・MSIX に署名する。MSIに入れる前に署名しないと、インストールされる側が未署名になる ──
   sign-exe:
     needs: build
     uses: zero-platform-lab/code-signing/.github/workflows/sign-windows.yml@master
     with:
       artifact-name: exe-unsigned
-      files: 'windows-side-dock.exe'
+      files: 'windows-side-dock.exe windows_side_dock_shell.dll windows-side-dock-shell.msix'
       signed-artifact-name: exe-signed
     secrets: inherit
 
@@ -49,7 +58,9 @@ jobs:
           name: exe-signed
           path: signed
       - name: WiX を入れる
-        run: dotnet tool install --global wix --version 6.0.2
+        run: |
+          dotnet tool install --global wix --version 6.0.2
+          wix extension add -g WixToolset.Util.wixext/6.0.2
       - name: MSI を作る
         shell: pwsh
         run: ./scripts/build-installer.ps1 -ExecutableDirectory signed
@@ -69,9 +80,10 @@ jobs:
       signed-artifact-name: msi-signed
     secrets: inherit
 
-  # ── 署名済みの MSI を Release に出す ──
+  # ── 署名済みの MSI を Release に出す（タグのときだけ） ──
   release:
     needs: sign-msi
+    if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4

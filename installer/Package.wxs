@@ -5,7 +5,8 @@
     Name="Windows Side Dock"
     Manufacturer="zero-platform-lab"
     Version="$(Version)"
-    Scope="perUser">
+    Scope="perUser"
+    Codepage="65001">
 
     <MajorUpgrade
       AllowSameVersionUpgrades="yes"
@@ -16,6 +17,39 @@
     <Property Id="ARPPRODUCTICON" Value="AppIcon" />
 
     <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <!--
+      右クリックメニューのスパースパッケージを登録・解除する。PowerShellの窓を出さないよう WixQuietExec で動かす。
+      署名を信頼していないPCでは登録に失敗するが、従来の右クリックメニューは使えるのでインストールは続ける。
+    -->
+    <SetProperty
+      Id="RegisterShellMenu"
+      Sequence="execute"
+      Before="RegisterShellMenu"
+      Value="&quot;[System64Folder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command &quot;Add-AppxPackage -Path '[INSTALLFOLDER]windows-side-dock-shell.msix' -ExternalLocation '[INSTALLFOLDER]'&quot;" />
+    <CustomAction
+      Id="RegisterShellMenu"
+      BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)"
+      DllEntry="WixQuietExec"
+      Execute="deferred"
+      Impersonate="yes"
+      Return="ignore" />
+    <SetProperty
+      Id="UnregisterShellMenu"
+      Sequence="execute"
+      Before="UnregisterShellMenu"
+      Value="&quot;[System64Folder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command &quot;Get-AppxPackage -Name ZeroPlatformLab.WindowsSideDock.ShellMenu | Remove-AppxPackage&quot;" />
+    <CustomAction
+      Id="UnregisterShellMenu"
+      BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)"
+      DllEntry="WixQuietExec"
+      Execute="deferred"
+      Impersonate="yes"
+      Return="ignore" />
+    <InstallExecuteSequence>
+      <Custom Action="UnregisterShellMenu" Before="RemoveFiles" Condition="REMOVE~=&quot;ALL&quot;" />
+      <Custom Action="RegisterShellMenu" After="InstallFiles" Condition="NOT REMOVE" />
+    </InstallExecuteSequence>
 
     <StandardDirectory Id="PerUserProgramFilesFolder">
       <Directory Id="INSTALLFOLDER" Name="Windows Side Dock">
@@ -28,6 +62,11 @@
               WorkingDirectory="INSTALLFOLDER"
               Advertise="no" />
           </File>
+        </Component>
+        <!-- Windows 11 の右クリックメニュー。DLLはここに置き、MSIXがエクスプローラーに登録する。 -->
+        <Component Id="ShellMenuFiles" Guid="8E0B5C44-3B1F-4E0B-9F2C-6A7D1C2E9B31">
+          <File Id="ShellMenuDll" Source="$(SourceDir)\windows_side_dock_shell.dll" KeyPath="yes" />
+          <File Id="ShellMenuPackage" Source="$(SourceDir)\windows-side-dock-shell.msix" />
         </Component>
       </Directory>
     </StandardDirectory>
@@ -77,6 +116,7 @@
 
     <Feature Id="MainFeature" Title="Windows Side Dock" Level="1">
       <ComponentRef Id="ApplicationFiles" />
+      <ComponentRef Id="ShellMenuFiles" />
       <ComponentRef Id="DesktopBackgroundMenu" />
       <ComponentRef Id="DirectoryBackgroundMenu" />
       <ComponentRef Id="StartupRegistration" />

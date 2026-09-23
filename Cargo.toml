@@ -1,3 +1,6 @@
+[workspace]
+members = [".", "shell-menu"]
+
 [package]
 name = "windows-side-dock"
 version = "0.1.27"

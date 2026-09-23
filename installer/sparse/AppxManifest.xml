@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Windows 11 の右クリックメニューにシェル拡張（shell-menu クレートのDLL）を登録するスパースパッケージ。
+  パッケージにはこのマニフェストとロゴだけを入れ、DLLとexeはMSIのインストール先（外部の場所）に置く。
+  Version は scripts/build-sparse-package.ps1 が Cargo.toml の版から埋める。
+  Publisher は署名証明書のサブジェクトと完全に一致させること（zero-platform-lab/code-signing）。
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
+  xmlns:desktop4="http://schemas.microsoft.com/appx/manifest/desktop/windows10/4"
+  xmlns:desktop5="http://schemas.microsoft.com/appx/manifest/desktop/windows10/5"
+  xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap10 desktop4 desktop5 com rescap">
+
+  <Identity
+    Name="ZeroPlatformLab.WindowsSideDock.ShellMenu"
+    Publisher="CN=Zero Platform Lab, O=Zero Platform Lab"
+    Version="$(Version)"
+    ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>Windows Side Dock</DisplayName>
+    <PublisherDisplayName>Zero Platform Lab</PublisherDisplayName>
+    <Logo>logo-150.png</Logo>
+    <uap10:AllowExternalContent>true</uap10:AllowExternalContent>
+  </Properties>
+
+  <Resources>
+    <Resource Language="ja-jp" />
+  </Resources>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.22000.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+    <rescap:Capability Name="unvirtualizedResources" />
+  </Capabilities>
+
+  <Applications>
+    <Application
+      Id="WindowsSideDock"
+      Executable="windows-side-dock.exe"
+      uap10:TrustLevel="mediumIL"
+      uap10:RuntimeBehavior="win32App">
+      <uap:VisualElements
+        AppListEntry="none"
+        DisplayName="Windows Side Dock"
+        Description="Windows Side Dock の右クリックメニュー"
+        BackgroundColor="transparent"
+        Square150x150Logo="logo-150.png"
+        Square44x44Logo="logo-44.png" />
+      <Extensions>
+        <desktop4:Extension Category="windows.fileExplorerContextMenus">
+          <desktop4:FileExplorerContextMenus>
+            <desktop5:ItemType Type="Directory\Background">
+              <desktop5:Verb Id="WindowsSideDock" Clsid="23E04CB3-838F-4762-B46F-9AEFAA12EB5B" />
+            </desktop5:ItemType>
+          </desktop4:FileExplorerContextMenus>
+        </desktop4:Extension>
+        <com:Extension Category="windows.comServer">
+          <com:ComServer>
+            <com:SurrogateServer DisplayName="Windows Side Dock の右クリックメニュー">
+              <com:Class Id="23E04CB3-838F-4762-B46F-9AEFAA12EB5B" Path="windows_side_dock_shell.dll" ThreadingModel="STA" />
+            </com:SurrogateServer>
+          </com:ComServer>
+        </com:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+</Package>
