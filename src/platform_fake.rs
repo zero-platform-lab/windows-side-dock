@@ -28,8 +28,10 @@ pub(crate) struct FakePlatform {
     pub(crate) tray_actions: RefCell<VecDeque<TrayAction>>,
     /// `None` なら見張れない環境。`Some` なら取り出すたびに `Some(false)` へ戻る。
     pub(crate) window_changes: Cell<Option<bool>>,
-    /// 画面の端を確保できたときに返す範囲。`None` なら確保に失敗する。
+    /// 画面の端を確保できたときに返す範囲。`None` なら `screen` から求める。
     pub(crate) edge: Option<egui::Rect>,
+    /// 画面全体。これがあると、Windowsと同じく指定された端と幅の範囲を確保して返す。
+    pub(crate) screen: Option<egui::Rect>,
     /// `reserve_edge` に渡された端と幅。
     pub(crate) reservations: RefCell<Vec<(DockSide, Option<f32>)>>,
 }
@@ -65,6 +67,7 @@ impl Default for FakePlatform {
             tray_actions: RefCell::default(),
             window_changes: Cell::new(None),
             edge: None,
+            screen: None,
             reservations: RefCell::default(),
         }
     }
@@ -144,7 +147,15 @@ impl Platform for FakePlatform {
     }
     fn reserve_edge(&self, side: DockSide, width: Option<f32>) -> Option<egui::Rect> {
         self.reservations.borrow_mut().push((side, width));
-        self.edge
+        self.edge.or_else(|| {
+            let (screen, width) = (self.screen?, width?);
+            let mut edge = screen;
+            match side {
+                DockSide::Left => edge.max.x = screen.left() + width,
+                DockSide::Right => edge.min.x = screen.right() - width,
+            }
+            Some(edge)
+        })
     }
     fn take_window_changes(&self) -> Option<bool> {
         let changes = self.window_changes.get();

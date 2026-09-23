@@ -529,6 +529,152 @@ fn with_edge() -> FakePlatform {
     }
 }
 
+/// 1920x1032の画面の `side` の端にDockを置いたアプリ。Dockの範囲とカーソルもその端に合わせる。
+fn docked_on(side: DockSide, test: &str) -> (Harness<'static, LauncherApp>, Rc<FakePlatform>) {
+    let dock_left = match side {
+        DockSide::Left => 0.0,
+        DockSide::Right => 1866.0,
+    };
+    let platform = FakePlatform {
+        screen: Some(egui::Rect::from_min_max(
+            egui::pos2(0.0, 0.0),
+            egui::pos2(1920.0, 1032.0),
+        )),
+        dock: Some(egui::Rect::from_min_size(
+            egui::pos2(dock_left, 0.0),
+            egui::vec2(54.0, 1032.0),
+        )),
+        cursor: Some(egui::pos2(dock_left + 27.0, 300.0)),
+        ..FakePlatform::default()
+    };
+    let (mut app, platform) = app_with(platform, test);
+    app.set_dock_side(side);
+    (harness(app), platform)
+}
+
+#[test]
+fn places_the_dock_and_its_popups_on_each_edge() {
+    struct Case {
+        side: DockSide,
+        dock_x: f32,
+        tab_x: f32,
+        menu_x: f32,
+        picker_x: f32,
+        settings_x: f32,
+    }
+    // 右端: ポップアップはDockの左へ、幅と隙間の分だけ離して開く。左端: Dockの右隣に開く。
+    let cases = [
+        Case {
+            side: DockSide::Right,
+            dock_x: 1866.0,
+            tab_x: 1908.0,
+            menu_x: 1866.0 - 210.0 - 8.0,
+            picker_x: 1866.0 - 480.0 - 8.0,
+            settings_x: 1866.0 - 380.0 - 12.0,
+        },
+        Case {
+            side: DockSide::Left,
+            dock_x: 0.0,
+            tab_x: 0.0,
+            menu_x: 54.0 + 8.0,
+            picker_x: 54.0 + 8.0,
+            settings_x: 54.0 + 12.0,
+        },
+    ];
+    for case in cases {
+        let side = case.side;
+        let (mut harness, platform) = docked_on(side, &format!("dock-edge-{side:?}"));
+        // 起動時: 選んだ端にDockの幅だけ確保し、その中へ高さいっぱいで置く。
+        assert_eq!(*platform.reservations.borrow(), [(side, Some(54.0))]);
+        harness.state_mut().applied_collapsed = None;
+        let commands = step_commands(&mut harness);
+        assert!(
+            commands.contains(&egui::ViewportCommand::OuterPosition(egui::pos2(
+                case.dock_x,
+                0.0
+            ))),
+            "{side:?}: {commands:?}"
+        );
+        assert!(commands.contains(&egui::ViewportCommand::InnerSize(egui::vec2(54.0, 1032.0))));
+
+        // ポップアップは画面の内側へ開く。
+        let state = harness.state_mut();
+        state.open_context_menu(ContextMenuTarget::Handle);
+        assert_eq!(
+            state.context_menu.map(|menu| menu.1),
+            Some(egui::pos2(case.menu_x, 300.0)),
+            "{side:?}"
+        );
+        state.context_menu = None;
+        let windows = (1..=2)
+            .map(|handle| RunningWindow {
+                handle,
+                title: format!("window {handle}"),
+            })
+            .collect();
+        state.open_or_activate_windows("Code".into(), windows);
+        assert_eq!(
+            state.window_picker.as_ref().map(|picker| picker.2.x),
+            Some(case.picker_x),
+            "{side:?}"
+        );
+        state.window_picker = None;
+        assert_eq!(
+            crate::layout::settings_dialog_position(platform.as_ref(), side).x,
+            case.settings_x,
+            "{side:?}"
+        );
+
+        // しまうと、つまみの幅だけを確保し、つまみを画面の端に付ける。
+        harness.state_mut().set_collapsed(true);
+        let commands = step_commands(&mut harness);
+        assert_eq!(
+            platform.reservations.borrow().last(),
+            Some(&(side, Some(12.0)))
+        );
+        assert!(
+            commands.contains(&egui::ViewportCommand::OuterPosition(egui::pos2(
+                case.tab_x, 0.0
+            ))),
+            "{side:?}: {commands:?}"
+        );
+        assert!(commands.contains(&egui::ViewportCommand::InnerSize(egui::vec2(12.0, 1032.0))));
+
+        // 引き出すと元の幅と位置に戻る。
+        harness.state_mut().set_collapsed(false);
+        let commands = step_commands(&mut harness);
+        assert_eq!(
+            platform.reservations.borrow().last(),
+            Some(&(side, Some(54.0)))
+        );
+        assert!(
+            commands.contains(&egui::ViewportCommand::OuterPosition(egui::pos2(
+                case.dock_x,
+                0.0
+            )))
+        );
+    }
+}
+
+#[test]
+fn switches_between_edges_and_back() {
+    let (mut harness, platform) = docked_on(DockSide::Right, "dock-edge-switch");
+    for side in [DockSide::Left, DockSide::Right, DockSide::Left] {
+        harness.state_mut().set_dock_side(side);
+        harness.step();
+        assert_eq!(
+            platform.reservations.borrow().last(),
+            Some(&(side, Some(54.0)))
+        );
+        assert_eq!(harness.state().config.load_dock_side(), side);
+    }
+    harness.state_mut().release_edge();
+    assert_eq!(
+        platform.reservations.borrow().last(),
+        Some(&(DockSide::Left, None))
+    );
+}
+
 #[test]
 fn reserves_the_right_edge_and_collapses_into_a_tab() {
     let (app, platform) = app_with(with_edge(), "dock-edge");
