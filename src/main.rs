@@ -1,19 +1,13 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod model;
+
 use eframe::egui::{self, Color32, Key};
 use eframe::{App, Frame};
+use model::{friendly_window_name, same_application, IconKind, LauncherItem, RunningWindow};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
-
-#[derive(Clone, Copy)]
-enum IconKind {
-    Folder,
-    Terminal,
-    Note,
-    Settings,
-    File,
-}
 
 #[derive(Clone, Copy, PartialEq)]
 enum PopupDirection {
@@ -44,22 +38,6 @@ impl PopupDirection {
             Self::Right => egui::RectAlign::RIGHT,
         }
     }
-}
-
-#[derive(Clone)]
-struct RunningWindow {
-    handle: isize,
-    title: String,
-}
-
-#[derive(Clone)]
-struct LauncherItem {
-    name: String,
-    command: String,
-    fallback_icon: IconKind,
-    icon: Option<egui::ColorImage>,
-    windows: Vec<RunningWindow>,
-    active: bool,
 }
 
 struct LauncherApp {
@@ -1103,47 +1081,6 @@ fn dock_directory() -> Option<PathBuf> {
     std::env::current_exe()
         .ok()
         .and_then(|path| path.parent().map(Path::to_path_buf))
-}
-
-fn normalized_name(value: &str) -> String {
-    value
-        .chars()
-        .filter(|character| character.is_alphanumeric())
-        .flat_map(char::to_lowercase)
-        .collect()
-}
-
-fn same_application(pinned: &LauncherItem, running: &LauncherItem) -> bool {
-    if pinned.command.eq_ignore_ascii_case(&running.command) {
-        return true;
-    }
-    if pinned.command.eq_ignore_ascii_case("ms-settings:")
-        && Path::new(&running.command)
-            .file_name()
-            .and_then(|name| name.to_str())
-            .is_some_and(|name| name.eq_ignore_ascii_case("SystemSettings.exe"))
-    {
-        return true;
-    }
-    let pinned_name = normalized_name(&pinned.name);
-    let running_name = normalized_name(&running.name);
-    running_name.chars().count() >= 4 && pinned_name.contains(&running_name)
-}
-
-fn friendly_window_name(title: &str, fallback: &str) -> String {
-    title
-        .rsplit_once(" - ")
-        .map(|(_, application)| application.trim())
-        .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| {
-            let trimmed = title.trim();
-            if trimmed.is_empty() {
-                fallback
-            } else {
-                trimmed
-            }
-        })
-        .to_owned()
 }
 
 #[cfg(windows)]

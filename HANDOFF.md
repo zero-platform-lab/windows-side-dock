@@ -86,8 +86,9 @@ Windows 11では「その他のオプションを確認」側に表示される�
 
 ## テストとカバレッジ
 
-- 現在の自動テスト: 0件
-- 実質的なカバレッジ: 0%
+- 現在の自動テスト: 6件（`model.rs`）
+- 全体行カバレッジ: 4.80%
+- `model.rs` 行カバレッジ: 98.75%
 - `cargo-llvm-cov 0.9.1` はインストール済み
 
 優先してテストすべき対象:
@@ -123,4 +124,3 @@ Windows 11では「その他のオプションを確認」側に表示される�
 - 直近の機能コミット: `37b9200 feat: add background context menu actions`
 - `windows-side-dock-screenshot.png` はユーザー指示によりGitへ追加しない
 - 既存のユーザー変更を破棄する `git reset --hard` 等は使用しない
-
