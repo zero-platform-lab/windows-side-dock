@@ -43,10 +43,6 @@ pub(crate) fn popup_alignment(
     }
 }
 
-pub(crate) fn launcher_window_position(platform: &dyn Platform) -> Option<egui::Pos2> {
-    platform.dock_rect().map(|dock| dock.min)
-}
-
 pub(crate) fn settings_dialog_position(
     platform: &dyn Platform,
     direction: PopupDirection,
@@ -318,14 +314,6 @@ mod tests {
             ..FakePlatform::default()
         };
         assert_eq!(tooltip_screen_position(&missing, 10.0, true), None);
-    }
-
-    #[test]
-    fn reports_dock_origin() {
-        assert_eq!(
-            launcher_window_position(&dock_at(100.0)),
-            Some(egui::pos2(100.0, 12.0))
-        );
     }
 
     #[test]

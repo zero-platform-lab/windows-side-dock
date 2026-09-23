@@ -218,29 +218,10 @@ fn opens_dock_menu_from_empty_background() {
 }
 
 #[test]
-fn moves_the_dock_by_dragging_the_handle() {
+fn moves_the_dock_with_the_native_window_drag() {
     let (mut harness, _platform) = dock("dock-drag");
     let commands = drag(&mut harness, "移動ハンドル", egui::vec2(-30.0, 20.0));
-    assert!(harness.state().drag_origin.is_none());
-    assert!(commands
-        .iter()
-        .any(|command| matches!(command, egui::ViewportCommand::OuterPosition(_))));
-}
-
-#[test]
-fn ignores_handle_drag_when_dock_position_is_unknown() {
-    let (app, _platform) = app_with(
-        FakePlatform {
-            dock: None,
-            ..FakePlatform::default()
-        },
-        "dock-drag-unknown",
-    );
-    let mut harness = harness(app);
-    let commands = drag(&mut harness, "移動ハンドル", egui::vec2(-30.0, 20.0));
-    assert!(!commands
-        .iter()
-        .any(|command| matches!(command, egui::ViewportCommand::OuterPosition(_))));
+    assert!(commands.contains(&egui::ViewportCommand::StartDrag));
 }
 
 #[test]

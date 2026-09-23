@@ -1,8 +1,7 @@
 use crate::app::{ContextMenuTarget, LauncherApp};
 use crate::config::{PopupDirection, ProcessTool};
 use crate::layout::{
-    directional_tooltip, format_date_time, launcher_window_position, settings_dialog_position,
-    SETTINGS_WIDTH,
+    directional_tooltip, format_date_time, settings_dialog_position, SETTINGS_WIDTH,
 };
 use crate::model::IconKind;
 use crate::theme::draw_icon_colored;
@@ -178,7 +177,7 @@ impl LauncherApp {
         }
     }
 
-    /// Dockを独自に移動するつまみ。Windowsのスナップによる最大化を避けるため、OSのドラッグは使わない。
+    /// Dockを移動するつまみ。右クリックでDockのメニューも開く。
     fn move_handle(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         // 右クリックでメニューも開けるよう、ドラッグに加えてクリックも受け付ける。
         let (handle, drag) =
@@ -191,16 +190,10 @@ impl LauncherApp {
                 Color32::from_gray(145),
             );
         }
+        // 移動はWindows標準のドラッグに任せる。最大化・全画面化は keep_window_state で元に戻し、
+        // 幅は起動時に54pxへ固定しているので、スナップで横に広がることもない。
         if drag.drag_started() {
-            self.drag_origin = launcher_window_position(self.platform.as_ref());
-        }
-        if let Some(origin) = self.drag_origin.filter(|_| drag.dragged()) {
-            ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(
-                origin + drag.drag_delta(),
-            ));
-        }
-        if drag.drag_stopped() {
-            self.drag_origin = None;
+            ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
         }
         if drag.secondary_clicked() {
             self.open_context_menu(ContextMenuTarget::Handle);

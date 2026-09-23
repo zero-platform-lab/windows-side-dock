@@ -95,7 +95,7 @@ Windows 11では「その他のオプションを確認」側に表示される�
 - ツールチップ表示中は位置を固定し、クリック成立フレームでは生成しない。
 - 右クリックメニューは開いた直後の非表示フレームで中身の大きさを測り（egui の sizing pass）、その大きさで表示する。固定サイズに戻すと、短いメニューで横と下に空白が出る。
 - 右クリックメニューとウィンドウ選択画面は、横位置をDockの端、縦位置をカーソルの高さに合わせる（`layout::beside_dock_at_cursor`）。カーソル基準に戻すとDockに重なる。0.1.5で実機確認済み。
-- Dockは最大化／全画面化を解除し、独自ドラッグで移動する。Windowsスナップによる不自然な挙動を避けるため。
+- Dockの移動は移動ハンドルからWindows標準のドラッグ（`ViewportCommand::StartDrag`）で行う（2026-09-23 ユーザー判断。以前の独自ドラッグは前フレームからの移動量しか使っておらず、左へ動かすとガタついた）。最大化・全画面化は `keep_window_state` ですぐ解除し、幅は `with_max_inner_size` で54pxに固定してスナップで広がらないようにしている。
 - Process Explorerは現在 `E:\Downloads\ProcessExplorer\procexp.exe` が設定されている。
 
 ## テストとカバレッジ
@@ -148,7 +148,7 @@ GitHub Releasesを使った自動更新はユーザー判断により対象外�
 - インストール先: `%LOCALAPPDATA%\Programs\Windows Side Dock`
 - Package ID: `ZeroPlatformLab.WindowsSideDock`（変更しないこと）
 - バージョン元: `Cargo.toml`
-- 現在のバージョン: `0.1.8`
+- 現在のバージョン: `0.1.9`
 - `build-installer.ps1` はUTF-8のため、Windows PowerShell 5.1ではなくPowerShell 7（`pwsh`）で実行すること
 - `MajorUpgrade`で旧版を置換し、ダウングレードを拒否
 - 同一バージョンの開発用再インストールを許可

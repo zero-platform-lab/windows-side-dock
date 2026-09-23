@@ -32,7 +32,6 @@ pub(crate) struct LauncherApp {
     pub(crate) show_settings: bool,
     pub(crate) font_size: f32,
     pub(crate) popup_direction: PopupDirection,
-    pub(crate) drag_origin: Option<egui::Pos2>,
     pub(crate) context_menu: Option<(ContextMenuTarget, egui::Pos2, Instant)>,
     /// 開いている右クリックメニューの中身の大きさ。開いた直後の非表示フレームで測る。
     pub(crate) context_menu_size: Option<egui::Vec2>,
@@ -93,7 +92,6 @@ impl LauncherApp {
             show_settings: false,
             font_size: 13.0,
             popup_direction: config.load_popup_direction(),
-            drag_origin: None,
             context_menu: None,
             context_menu_size: None,
             window_picker: None,

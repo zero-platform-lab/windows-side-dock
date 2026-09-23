@@ -43,6 +43,8 @@ fn main() -> eframe::Result {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size(size)
             .with_min_inner_size([54.0, 220.0])
+            // 幅を固定し、ドラッグ中のWindowsのスナップで横に広がらないようにする。
+            .with_max_inner_size([54.0, 4000.0])
             .with_position(position)
             .with_decorations(false)
             .with_resizable(true)
