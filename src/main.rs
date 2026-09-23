@@ -680,13 +680,14 @@ impl LauncherApp {
             ContextMenuTarget::Pinned(index) => {
                 match self.items.get(index).map(|item| item.windows.len()) {
                     Some(count) if count > 1 => (112.0 + count as f32 * 34.0).min(420.0),
-                    Some(1) => 136.0,
+                    Some(1) => 150.0,
                     _ => 102.0,
                 }
             }
             ContextMenuTarget::Running(index) => {
                 match self.running.get(index).map(|item| item.windows.len()) {
                     Some(count) if count > 1 => (78.0 + count as f32 * 34.0).min(420.0),
+                    Some(1) => 116.0,
                     _ => 102.0,
                 }
             }
@@ -700,7 +701,7 @@ impl LauncherApp {
             }
             _ => 0,
         };
-        let width = if window_count > 1 { 430.0 } else { 210.0 };
+        let width = if window_count > 0 { 430.0 } else { 210.0 };
         let position =
             if width > 210.0 && self.popup_direction.alignment(ctx) == egui::RectAlign::LEFT {
                 egui::pos2(position.x - (width - 210.0), position.y)
@@ -786,13 +787,17 @@ impl LauncherApp {
                             }
                             if is_running {
                                 let windows = self.items[index].windows.clone();
+                                ui.label("ウィンドウへ移動");
                                 if windows.len() == 1 {
-                                    if ui.button("ウィンドウへ移動").clicked() {
+                                    let window = &windows[0];
+                                    if left_aligned_button(ui, &window.title, 30.0)
+                                        .on_hover_text(&window.title)
+                                        .clicked()
+                                    {
                                         activate_taskbar_item(&windows);
                                         close = true;
                                     }
                                 } else {
-                                    ui.label("ウィンドウへ移動");
                                     egui::ScrollArea::vertical()
                                         .max_height((height - 105.0).max(68.0))
                                         .show(ui, |ui| {
@@ -830,13 +835,17 @@ impl LauncherApp {
                                 return;
                             }
                             let windows = self.running[index].windows.clone();
+                            ui.label("ウィンドウへ移動");
                             if windows.len() == 1 {
-                                if ui.button("ウィンドウへ移動").clicked() {
+                                let window = &windows[0];
+                                if left_aligned_button(ui, &window.title, 30.0)
+                                    .on_hover_text(&window.title)
+                                    .clicked()
+                                {
                                     activate_taskbar_item(&windows);
                                     close = true;
                                 }
                             } else {
-                                ui.label("ウィンドウへ移動");
                                 egui::ScrollArea::vertical()
                                     .max_height((height - 71.0).max(68.0))
                                     .show(ui, |ui| {
