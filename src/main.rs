@@ -1113,7 +1113,7 @@ fn running_apps() -> Vec<LauncherItem> {
 fn activate_taskbar_item(windows: &[RunningWindow]) {
     use windows_sys::Win32::Foundation::HWND;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GetForegroundWindow, SetForegroundWindow, ShowWindow, SW_MINIMIZE, SW_RESTORE,
+        GetForegroundWindow, IsIconic, SetForegroundWindow, ShowWindow, SW_MINIMIZE, SW_RESTORE,
     };
     if let Some(item) = windows.first() {
         unsafe {
@@ -1121,7 +1121,9 @@ fn activate_taskbar_item(windows: &[RunningWindow]) {
             if GetForegroundWindow() == window {
                 ShowWindow(window, SW_MINIMIZE);
             } else {
-                ShowWindow(window, SW_RESTORE);
+                if IsIconic(window) != 0 {
+                    ShowWindow(window, SW_RESTORE);
+                }
                 SetForegroundWindow(window);
             }
         }
