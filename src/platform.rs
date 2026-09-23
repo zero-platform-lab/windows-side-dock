@@ -1,5 +1,4 @@
-use crate::model::{friendly_window_name, IconKind, LauncherItem, RunningWindow};
-use std::path::Path;
+use crate::model::{group_windows, IconKind, LauncherItem, RunningWindow};
 
 #[cfg(windows)]
 pub(crate) fn open_target(target: &str) -> bool {
@@ -84,37 +83,17 @@ pub(crate) fn running_apps() -> Vec<LauncherItem> {
         EnumWindows(Some(enumerate), &mut windows as *mut _ as LPARAM);
     }
     let foreground = unsafe { GetForegroundWindow() as isize };
-    let mut items: Vec<LauncherItem> = Vec::new();
-    for (window, command, title) in windows {
-        if let Some(existing) = items
-            .iter_mut()
-            .find(|item| item.command.eq_ignore_ascii_case(&command))
-        {
-            existing.windows.push(RunningWindow {
-                handle: window,
-                title,
-            });
-            existing.active |= window == foreground;
-        } else {
-            let executable_name = Path::new(&command)
-                .file_stem()
-                .and_then(|v| v.to_str())
-                .unwrap_or("アプリ")
-                .to_owned();
-            items.push(LauncherItem {
-                name: friendly_window_name(&title, &executable_name),
-                icon: load_shell_icon(&command),
-                command,
-                fallback_icon: IconKind::File,
-                windows: vec![RunningWindow {
-                    handle: window,
-                    title,
-                }],
-                active: window == foreground,
-            });
-        }
-    }
-    items
+    group_windows(windows, foreground)
+        .into_iter()
+        .map(|group| LauncherItem {
+            icon: load_shell_icon(&group.command),
+            name: group.name,
+            command: group.command,
+            fallback_icon: IconKind::File,
+            windows: group.windows,
+            active: group.active,
+        })
+        .collect()
 }
 
 #[cfg(not(windows))]

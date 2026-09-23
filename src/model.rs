@@ -66,6 +66,44 @@ pub(crate) fn friendly_window_name(title: &str, fallback: &str) -> String {
         .to_owned()
 }
 
+pub(crate) struct WindowGroup {
+    pub(crate) name: String,
+    pub(crate) command: String,
+    pub(crate) windows: Vec<RunningWindow>,
+    pub(crate) active: bool,
+}
+
+/// 列挙順を保ったまま、実行ファイルのパスごとにウィンドウをまとめる。
+pub(crate) fn group_windows(
+    windows: Vec<(isize, String, String)>,
+    foreground: isize,
+) -> Vec<WindowGroup> {
+    let mut groups: Vec<WindowGroup> = Vec::new();
+    for (handle, command, title) in windows {
+        let active = handle == foreground;
+        if let Some(existing) = groups
+            .iter_mut()
+            .find(|group| group.command.eq_ignore_ascii_case(&command))
+        {
+            existing.windows.push(RunningWindow { handle, title });
+            existing.active |= active;
+        } else {
+            let executable_name = Path::new(&command)
+                .file_stem()
+                .and_then(|value| value.to_str())
+                .unwrap_or("アプリ")
+                .to_owned();
+            groups.push(WindowGroup {
+                name: friendly_window_name(&title, &executable_name),
+                command,
+                windows: vec![RunningWindow { handle, title }],
+                active,
+            });
+        }
+    }
+    groups
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -123,5 +161,53 @@ mod tests {
     #[test]
     fn falls_back_for_an_empty_window_title() {
         assert_eq!(friendly_window_name("   ", "notepad"), "notepad");
+    }
+
+    #[test]
+    fn uses_whole_title_when_it_has_no_application_suffix() {
+        assert_eq!(friendly_window_name("  電卓  ", "calc"), "電卓");
+        assert_eq!(friendly_window_name("draft - ", "notepad"), "draft -");
+    }
+
+    fn window(handle: isize, command: &str, title: &str) -> (isize, String, String) {
+        (handle, command.into(), title.into())
+    }
+
+    #[test]
+    fn groups_windows_by_executable_ignoring_case() {
+        let groups = group_windows(
+            vec![
+                window(1, r"C:\Apps\Code.exe", "a.rs - Visual Studio Code"),
+                window(2, r"C:\Windows\explorer.exe", "Downloads"),
+                window(3, r"c:\apps\CODE.EXE", "b.rs - Visual Studio Code"),
+            ],
+            0,
+        );
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups[0].name, "Visual Studio Code");
+        assert_eq!(groups[0].command, r"C:\Apps\Code.exe");
+        let titles: Vec<_> = groups[0].windows.iter().map(|w| w.title.as_str()).collect();
+        assert_eq!(titles, ["a.rs - Visual Studio Code", "b.rs - Visual Studio Code"]);
+        assert_eq!(groups[1].name, "Downloads");
+    }
+
+    #[test]
+    fn marks_group_active_when_any_window_is_foreground() {
+        let groups = group_windows(
+            vec![
+                window(1, r"C:\Apps\Code.exe", "a"),
+                window(2, r"C:\Apps\Code.exe", "b"),
+                window(3, r"C:\Apps\Other.exe", "c"),
+            ],
+            2,
+        );
+        assert!(groups[0].active);
+        assert!(!groups[1].active);
+    }
+
+    #[test]
+    fn names_group_from_executable_when_title_is_blank() {
+        let groups = group_windows(vec![window(1, r"C:\Tools\procexp64.exe", " ")], 0);
+        assert_eq!(groups[0].name, "procexp64");
     }
 }
