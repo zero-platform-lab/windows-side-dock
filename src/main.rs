@@ -702,8 +702,12 @@ impl LauncherApp {
                 .with_transparent(true)
                 .with_taskbar(false)
                 .with_always_on_top()
+                .with_visible(opened_at.elapsed() >= Duration::from_millis(16))
                 .with_active(true),
             |menu_ctx, _class| {
+                if opened_at.elapsed() < Duration::from_millis(16) {
+                    menu_ctx.request_repaint_after(Duration::from_millis(16));
+                }
                 if menu_ctx.input(|input| {
                     input.viewport().close_requested()
                         || input.key_pressed(Key::Escape)
@@ -1571,6 +1575,12 @@ fn settings_dialog_position(_ctx: &egui::Context, _direction: PopupDirection) ->
 }
 
 fn directional_tooltip(response: &egui::Response, text: &str, alignment: egui::RectAlign) {
+    if response
+        .ctx
+        .input(|input| input.pointer.any_down() || input.pointer.secondary_clicked())
+    {
+        return;
+    }
     if !egui::Tooltip::should_show_tooltip(response, false) {
         return;
     }
