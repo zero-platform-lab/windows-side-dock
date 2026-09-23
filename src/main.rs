@@ -76,6 +76,7 @@ struct LauncherApp {
     confirm_close_all: bool,
     process_tool: ProcessTool,
     process_explorer_path: String,
+    monitor_status: Option<String>,
 }
 
 impl LauncherApp {
@@ -122,6 +123,7 @@ impl LauncherApp {
             confirm_close_all: false,
             process_tool: load_process_tool(),
             process_explorer_path: load_process_explorer_path(),
+            monitor_status: None,
         };
         app.load_registered();
         app
@@ -192,7 +194,7 @@ impl LauncherApp {
             pinned.active = false;
             if let Some(running) = discovered
                 .iter()
-                .find(|running| running.command.eq_ignore_ascii_case(&pinned.command))
+                .find(|running| same_application(pinned, running))
             {
                 pinned.windows = running.windows.clone();
                 pinned.active = running.active;
@@ -204,7 +206,7 @@ impl LauncherApp {
                 !self
                     .items
                     .iter()
-                    .any(|pinned| pinned.command.eq_ignore_ascii_case(&running.command))
+                    .any(|pinned| same_application(pinned, running))
             })
             .collect();
     }
@@ -505,13 +507,26 @@ impl App for LauncherApp {
                             );
                             if path_response.changed() {
                                 save_process_explorer_path(&self.process_explorer_path);
+                                self.monitor_status = None;
                             }
-                            if self.process_explorer_path.trim().is_empty() {
+                            let normalized =
+                                normalized_executable_path(&self.process_explorer_path);
+                            if normalized.is_empty() {
                                 ui.colored_label(
                                     Color32::from_rgb(255, 175, 90),
                                     "実行ファイルのパスを設定してください",
                                 );
+                            } else if !Path::new(&normalized).is_file() {
+                                ui.colored_label(
+                                    Color32::from_rgb(255, 120, 120),
+                                    "指定されたファイルが見つかりません",
+                                );
+                            } else if ui.button("Process Explorerをテスト起動").clicked() {
+                                self.launch_process_tool();
                             }
+                        }
+                        if let Some(message) = &self.monitor_status {
+                            ui.colored_label(Color32::from_rgb(255, 140, 100), message);
                         }
                         settings_ctx.style_mut(|style| {
                             if let Some(font) = style.text_styles.get_mut(&egui::TextStyle::Body) {
@@ -537,16 +552,29 @@ impl App for LauncherApp {
 }
 
 impl LauncherApp {
-    fn launch_process_tool(&self) {
+    fn launch_process_tool(&mut self) -> bool {
         match self.process_tool {
             ProcessTool::TaskManager => {
-                let _ = open_target("taskmgr.exe");
+                let opened = open_target("taskmgr.exe");
+                self.monitor_status =
+                    (!opened).then(|| "タスク マネージャーを起動できませんでした".into());
+                opened
             }
             ProcessTool::ProcessExplorer => {
-                let path = self.process_explorer_path.trim();
-                if !path.is_empty() {
-                    let _ = open_target(path);
+                let path = normalized_executable_path(&self.process_explorer_path);
+                if path.is_empty() || !Path::new(&path).is_file() {
+                    self.monitor_status =
+                        Some("Process Explorerの実行ファイルが見つかりません".into());
+                    self.show_settings = true;
+                    return false;
                 }
+                let opened = open_target(&path);
+                self.monitor_status =
+                    (!opened).then(|| "Process Explorerを起動できませんでした".into());
+                if !opened {
+                    self.show_settings = true;
+                }
+                opened
             }
         }
     }
@@ -900,6 +928,46 @@ fn item(name: &str, command: &str, fallback_icon: IconKind, icon_source: &str) -
     }
 }
 
+fn normalized_executable_path(value: &str) -> String {
+    value
+        .trim()
+        .trim_matches(|character| character == '"' || character == '\'')
+        .to_owned()
+}
+
+fn normalized_name(value: &str) -> String {
+    value
+        .chars()
+        .filter(|character| character.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+fn same_application(pinned: &LauncherItem, running: &LauncherItem) -> bool {
+    if pinned.command.eq_ignore_ascii_case(&running.command) {
+        return true;
+    }
+    let pinned_name = normalized_name(&pinned.name);
+    let running_name = normalized_name(&running.name);
+    running_name.chars().count() >= 4 && pinned_name.contains(&running_name)
+}
+
+fn friendly_window_name(title: &str, fallback: &str) -> String {
+    title
+        .rsplit_once(" - ")
+        .map(|(_, application)| application.trim())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| {
+            let trimmed = title.trim();
+            if trimmed.is_empty() {
+                fallback
+            } else {
+                trimmed
+            }
+        })
+        .to_owned()
+}
+
 #[cfg(windows)]
 fn open_target(target: &str) -> bool {
     use std::os::windows::ffi::OsStrExt;
@@ -997,11 +1065,12 @@ fn running_apps() -> Vec<LauncherItem> {
             });
             existing.active |= window == foreground;
         } else {
-            let name = Path::new(&command)
+            let executable_name = Path::new(&command)
                 .file_stem()
                 .and_then(|value| value.to_str())
                 .unwrap_or("アプリ")
                 .to_owned();
+            let name = friendly_window_name(&title, &executable_name);
             items.push(LauncherItem {
                 name,
                 icon: load_shell_icon(&command),
