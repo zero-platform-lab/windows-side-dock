@@ -1,7 +1,8 @@
-//! 画面の右端に確保するDockの場所と、Dockをしまう・引き出す操作。
-//! 右端を確保すると最大化したウィンドウはDockの手前で止まる。しまうと確保はつまみの幅だけになる。
+//! 画面の端に確保するDockの場所と、Dockをしまう・引き出す操作。
+//! 端を確保すると最大化したウィンドウはDockの手前で止まる。しまうと確保はつまみの幅だけになる。
 
 use crate::app::{ContextMenuTarget, LauncherApp};
+use crate::config::DockSide;
 use crate::layout::{directional_tooltip, DOCK_MARGIN, DOCK_WIDTH};
 use eframe::egui::{self, Color32};
 
@@ -36,15 +37,40 @@ pub(crate) fn dock_in_edge(
     }
 }
 
-/// 右端を確保できなかったときの代わりの範囲。作業領域の右端を使う。
-fn fallback_edge(work_area: egui::Rect, width: f32) -> egui::Rect {
-    egui::Rect::from_min_max(
-        egui::pos2(work_area.right() - width, work_area.top()),
-        work_area.right_bottom(),
-    )
+/// 端を確保できなかったときの代わりの範囲。作業領域の `side` の端を使う。
+fn fallback_edge(work_area: egui::Rect, side: DockSide, width: f32) -> egui::Rect {
+    let mut edge = work_area;
+    match side {
+        DockSide::Left => edge.max.x = work_area.left() + width,
+        DockSide::Right => edge.min.x = work_area.right() - width,
+    }
+    edge
+}
+
+/// つまみは画面の内側だけ角を丸める。
+fn tab_corners(side: DockSide) -> egui::CornerRadius {
+    match side {
+        DockSide::Left => egui::CornerRadius {
+            ne: 6,
+            se: 6,
+            ..Default::default()
+        },
+        DockSide::Right => egui::CornerRadius {
+            nw: 6,
+            sw: 6,
+            ..Default::default()
+        },
+    }
 }
 
 impl LauncherApp {
+    /// Dockを置く端を変える。次のフレームで確保し直して移る。
+    pub(crate) fn set_dock_side(&mut self, side: DockSide) {
+        self.dock_side = side;
+        self.config.save_dock_side(side);
+        self.applied_collapsed = None;
+    }
+
     pub(crate) fn set_collapsed(&mut self, collapsed: bool) {
         self.collapsed = collapsed;
         self.context_menu = None;
@@ -59,10 +85,11 @@ impl LauncherApp {
         self.applied_collapsed = Some(self.collapsed);
         let scale = ctx.native_pixels_per_point().unwrap_or(1.0);
         let width = reserved_width(self.collapsed) * scale;
+        let side = self.dock_side;
         let Some(edge) = self
             .platform
-            .reserve_right_edge(Some(width))
-            .or_else(|| Some(fallback_edge(self.platform.work_area()?, width)))
+            .reserve_edge(side, Some(width))
+            .or_else(|| Some(fallback_edge(self.platform.work_area()?, side, width)))
         else {
             return;
         };
@@ -80,7 +107,7 @@ impl LauncherApp {
 
     /// 終了時に画面の端の確保をやめ、作業領域を元に戻す。
     pub(crate) fn release_edge(&mut self) {
-        self.platform.reserve_right_edge(None);
+        self.platform.reserve_edge(self.dock_side, None);
     }
 
     /// しまっている間に画面の端に出すつまみ。クリックで引き出し、右クリックでDockのメニューを開く。
@@ -93,11 +120,7 @@ impl LauncherApp {
                         1.0_f32,
                         Color32::from_rgba_unmultiplied(255, 255, 255, 55),
                     ))
-                    .corner_radius(egui::CornerRadius {
-                        nw: 6,
-                        sw: 6,
-                        ..Default::default()
-                    }),
+                    .corner_radius(tab_corners(self.dock_side)),
             )
             .show(ctx, |ui| {
                 let area = ui.max_rect();
@@ -138,17 +161,20 @@ impl LauncherApp {
             egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Dockをしまう")
         });
         let color = Color32::from_gray(if response.hovered() { 220 } else { 145 });
+        // 矢印はDockのある端を向く。
+        let toward = match self.dock_side {
+            DockSide::Left => -1.0,
+            DockSide::Right => 1.0,
+        };
         let center = rect.center();
         for offset in [-3.0, 3.0] {
-            let tip = center + egui::vec2(offset + 2.0, 0.0);
-            ui.painter().line_segment(
-                [tip + egui::vec2(-4.0, -4.0), tip],
-                egui::Stroke::new(1.5_f32, color),
-            );
-            ui.painter().line_segment(
-                [tip + egui::vec2(-4.0, 4.0), tip],
-                egui::Stroke::new(1.5_f32, color),
-            );
+            let tip = center + egui::vec2((offset + 2.0) * toward, 0.0);
+            for rise in [-4.0, 4.0] {
+                ui.painter().line_segment(
+                    [tip + egui::vec2(-4.0 * toward, rise), tip],
+                    egui::Stroke::new(1.5_f32, color),
+                );
+            }
         }
         if response.clicked() {
             self.set_collapsed(true);
@@ -190,9 +216,22 @@ mod tests {
 
     #[test]
     fn falls_back_to_the_work_area_edge() {
+        let work_area = rect(0.0, 0.0, 1920.0, 1032.0);
         assert_eq!(
-            fallback_edge(rect(0.0, 0.0, 1920.0, 1032.0), 78.0),
+            fallback_edge(work_area, DockSide::Right, 78.0),
             rect(1842.0, 0.0, 1920.0, 1032.0)
         );
+        assert_eq!(
+            fallback_edge(work_area, DockSide::Left, 78.0),
+            rect(0.0, 0.0, 78.0, 1032.0)
+        );
+    }
+
+    #[test]
+    fn rounds_only_the_inner_corners_of_the_tab() {
+        assert_eq!(tab_corners(DockSide::Right).nw, 6);
+        assert_eq!(tab_corners(DockSide::Right).ne, 0);
+        assert_eq!(tab_corners(DockSide::Left).ne, 6);
+        assert_eq!(tab_corners(DockSide::Left).nw, 0);
     }
 }

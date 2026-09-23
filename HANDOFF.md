@@ -31,7 +31,7 @@ MSI生成:
 
 ## 現在の主な機能
 
-- 画面右上を初期位置とし、作業領域の高さいっぱいに開く、移動・縦サイズ変更可能な枠なしDock
+- 画面の左右どちらかの端（設定「Dockの位置」。既定は右、`dock_side.txt`）に、作業領域の高さいっぱいで開く枠なしDock。自由な移動と縦のサイズ変更は0.1.18で廃止（ユーザー判断）
 - 日付、曜日、時刻表示
 - BIZ UDPゴシックの利用
 - ブラックメタリック背景とシルバーのDock設定アイコン
@@ -50,7 +50,7 @@ MSI生成:
 - タスクトレイのアイコン（左クリックでDockの表示／非表示、右クリックでDock 設定・システムモニター・終了）
 - アプリのアイコン（`assets/icon.ico`。`scripts/make-icon.py` で生成し、`build.rs` がexeへ埋め込む。トレイはexeのリソース番号1、ウィンドウは `assets/icon-64.rgba` を使う）
 - 設定「Dockを常に手前に表示」（既定はオフ。`always_on_top.txt` に `on`/`off` で保存し、`apply_window_level` が変化時だけウィンドウへ反映）
-- 画面の右端の確保（AppBar）。最大化したウィンドウはDockの手前で止まる。時計の下の「≫」、Dockの右クリックメニュー、トレイのクリックでDockを細いつまみへしまうと、確保もつまみの幅だけになる。つまみのクリックで引き出す
+- 画面の端の確保（AppBar）。最大化したウィンドウはDockの手前で止まる。時計の下の「≫」、Dockの右クリックメニュー、トレイのクリックでDockを細いつまみへしまうと、確保もつまみの幅だけになる。つまみのクリックで引き出す
 - ログオン時の自動起動（MSIが `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` の `WindowsSideDock` を登録・削除）
 
 ## 右クリック操作
@@ -58,7 +58,7 @@ MSI生成:
 - アプリアイコン: 起動、ウィンドウタイトル選択、ピン留め／解除、すべて閉じる
 - 時計: 設定で選択したTask ManagerまたはProcess Explorer
 - Dockの空白背景: Windows Side Dockの場所、プロセスツール、Dock設定
-- 移動ハンドル、設定の歯車: Dockの空白背景と同じメニュー
+- 設定の歯車: Dockの空白背景と同じメニュー
 
 右クリックメニューとツールチップは、親Viewport内へ制限されないよう子Viewportで実装している。この方針は過去のユーザー判断によるものなので、egui標準Popupへ安易に戻さないこと。
 
@@ -100,7 +100,7 @@ Windows 11では「その他のオプションを確認」側に表示される�
 - ツールチップ表示中は位置を固定し、クリック成立フレームでは生成しない。
 - 右クリックメニューは開いた直後の非表示フレームで中身の大きさを測り（egui の sizing pass）、その大きさで表示する。固定サイズに戻すと、短いメニューで横と下に空白が出る。
 - 右クリックメニューとウィンドウ選択画面は、横位置をDockの端、縦位置をカーソルの高さに合わせる（`layout::beside_dock_at_cursor`）。カーソル基準に戻すとDockに重なる。0.1.5で実機確認済み。
-- Dockの移動は移動ハンドルからWindows標準のドラッグ（`ViewportCommand::StartDrag`）で行う（2026-09-23 ユーザー判断。以前の独自ドラッグは前フレームからの移動量しか使っておらず、左へ動かすとガタついた）。最大化・全画面化は `keep_window_state` ですぐ解除し、幅は `with_max_inner_size` で54pxに固定してスナップで広がらないようにしている。
+- Dockの自由な移動（移動ハンドル・`StartDrag`）と縦のサイズ変更は0.1.18で廃止し、左右どちらかの端に固定した（2026-09-23 ユーザー判断）。最大化・全画面化は `keep_window_state` ですぐ解除する。
 - Process Explorerは現在 `E:\Downloads\ProcessExplorer\procexp.exe` が設定されている。
 
 ## テストとカバレッジ
@@ -131,7 +131,7 @@ Windows 11では「その他のオプションを確認」側に表示される�
 - `platform.rs`: `Platform` トレイトと、それを使うウィンドウ操作の判断
 - `win32.rs`: `Platform` のWin32実装（計測対象外）
 - `win32_events.rs`: ほかのアプリのウィンドウの変化（表示・非表示・破棄・前面・最小化・クローク・タイトル）を `SetWinEventHook` で受け、描画を起こす（計測対象外）。タイトルの変化は1秒にまとめる。見張れているときDockは変化があったときと時計の分の変わり目にしか描き直さない。登録に失敗したら1秒ごとの確認に戻る（`Platform::take_window_changes` が `None`）
-- `edge.rs`: 画面の右端の確保範囲とDockの位置の計算、しまう・引き出す操作とつまみの描画
+- `edge.rs`: 画面の端の確保範囲とDockの位置の計算、しまう・引き出す操作とつまみの描画
 - `win32_appbar.rs`: AppBarの登録・確保・解除（計測対象外）。強制終了してもWindowsが確保を解除する（確認済み）。通常終了は `App::on_exit` で解除
 - `win32_tray.rs`: タスクトレイのアイコンとメニュー（計測対象外）。メニュー操作は `TrayAction` として待ち行列に積み、`LauncherApp::handle_tray_actions` が処理する。操作を積む前にDockのウィンドウを表示しておく（非表示中はeguiの描画が止まるため）。左クリックはDockをしまう・引き出す
 - `app.rs`: アプリ状態と操作
@@ -146,7 +146,6 @@ Windows 11では「その他のオプションを確認」側に表示される�
 優先度が高い未完了事項:
 
 1. Windows 11の新しい（短縮版の）右クリックメニューへの登録。IExplorerCommandを実装したシェル拡張DLLと、パッケージIDを付けるスパースMSIXパッケージが必要で、MSIXには署名が要る（自己署名＋この PC の TrustedPeople への登録、またはGitHub Actions＋Azure Trusted Signing）。ユーザー判断で後回し（2026-09-23）。
-2. 画面の端を確保している間も、移動ハンドルのドラッグとサイズ変更のつまみでDockを確保範囲の外へ動かせてしまう。しまう・引き出すと元の位置に戻る。
 
 GitHub Releasesを使った自動更新はユーザー判断により対象外（2026-09-23）。更新は新しいMSIを手動で実行する方式とする。
 
@@ -158,7 +157,7 @@ GitHub Releasesを使った自動更新はユーザー判断により対象外�
 - インストール先: `%LOCALAPPDATA%\Programs\Windows Side Dock`
 - Package ID: `ZeroPlatformLab.WindowsSideDock`（変更しないこと）
 - バージョン元: `Cargo.toml`
-- 現在のバージョン: `0.1.17`
+- 現在のバージョン: `0.1.19`
 - `build-installer.ps1` はUTF-8のため、Windows PowerShell 5.1ではなくPowerShell 7（`pwsh`）で実行すること
 - `MajorUpgrade`で旧版を置換し、ダウングレードを拒否
 - 同一バージョンの開発用再インストールを許可

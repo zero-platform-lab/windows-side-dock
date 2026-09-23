@@ -7,6 +7,13 @@ pub(crate) enum PopupDirection {
     Right,
 }
 
+/// Dockを置く画面の端。
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum DockSide {
+    Left,
+    Right,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum ProcessTool {
     TaskManager,
@@ -22,6 +29,8 @@ const PROCESS_TOOL_FILE: &str = "process_tool.txt";
 const PROCESS_EXPLORER_PATH_FILE: &str = "process_explorer_path.txt";
 /// 0.1.16で追加。旧保存先には存在しないため移行対象に含めない。
 const ALWAYS_ON_TOP_FILE: &str = "always_on_top.txt";
+/// 0.1.18で追加。旧保存先には存在しないため移行対象に含めない。
+const DOCK_SIDE_FILE: &str = "dock_side.txt";
 const CONFIG_FILES: [&str; 4] = [
     ITEMS_FILE,
     POPUP_DIRECTION_FILE,
@@ -124,6 +133,22 @@ impl ConfigStore {
 
     pub(crate) fn save_always_on_top(&self, enabled: bool) {
         self.write(ALWAYS_ON_TOP_FILE, if enabled { "on" } else { "off" });
+    }
+
+    /// Dockを置く画面の端。既定は右。
+    pub(crate) fn load_dock_side(&self) -> DockSide {
+        match self.read(DOCK_SIDE_FILE).as_deref().map(str::trim) {
+            Some("left") => DockSide::Left,
+            _ => DockSide::Right,
+        }
+    }
+
+    pub(crate) fn save_dock_side(&self, side: DockSide) {
+        let value = match side {
+            DockSide::Left => "left",
+            DockSide::Right => "right",
+        };
+        self.write(DOCK_SIDE_FILE, value);
     }
 }
 
@@ -233,6 +258,7 @@ mod tests {
         config.save_process_tool(ProcessTool::ProcessExplorer);
         config.save_process_explorer_path("  E:\\procexp.exe \n");
         config.save_always_on_top(true);
+        config.save_dock_side(DockSide::Left);
 
         let reloaded = store(&root);
         assert_eq!(
@@ -242,6 +268,9 @@ mod tests {
         assert_eq!(reloaded.load_popup_direction(), PopupDirection::Left);
         assert_eq!(reloaded.load_process_tool(), ProcessTool::ProcessExplorer);
         assert!(reloaded.load_always_on_top());
+        assert_eq!(reloaded.load_dock_side(), DockSide::Left);
+        reloaded.save_dock_side(DockSide::Right);
+        assert_eq!(reloaded.load_dock_side(), DockSide::Right);
         reloaded.save_always_on_top(false);
         assert!(!reloaded.load_always_on_top());
         assert_eq!(reloaded.load_process_explorer_path(), r"E:\procexp.exe");
@@ -260,6 +289,7 @@ mod tests {
         assert_eq!(config.load_popup_direction(), PopupDirection::Auto);
         assert_eq!(config.load_process_tool(), ProcessTool::TaskManager);
         assert!(!config.load_always_on_top());
+        assert_eq!(config.load_dock_side(), DockSide::Right);
         assert_eq!(config.load_process_explorer_path(), "");
     }
 

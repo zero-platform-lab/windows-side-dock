@@ -1,6 +1,7 @@
 //! テスト用の偽のOS。操作を `calls` に記録し、問い合わせの戻り値はフィールドで指定する。
 
 use super::{LocalTime, Platform, TrayAction};
+use crate::config::DockSide;
 use eframe::egui;
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, VecDeque};
@@ -26,10 +27,10 @@ pub(crate) struct FakePlatform {
     pub(crate) tray_actions: RefCell<VecDeque<TrayAction>>,
     /// `None` なら見張れない環境。`Some` なら取り出すたびに `Some(false)` へ戻る。
     pub(crate) window_changes: Cell<Option<bool>>,
-    /// 画面の右端を確保できたときに返す範囲。`None` なら確保に失敗する。
+    /// 画面の端を確保できたときに返す範囲。`None` なら確保に失敗する。
     pub(crate) edge: Option<egui::Rect>,
-    /// `reserve_right_edge` に渡された幅。
-    pub(crate) reservations: RefCell<Vec<Option<f32>>>,
+    /// `reserve_edge` に渡された端と幅。
+    pub(crate) reservations: RefCell<Vec<(DockSide, Option<f32>)>>,
 }
 
 impl Default for FakePlatform {
@@ -136,8 +137,8 @@ impl Platform for FakePlatform {
     fn take_tray_action(&self) -> Option<TrayAction> {
         self.tray_actions.borrow_mut().pop_front()
     }
-    fn reserve_right_edge(&self, width: Option<f32>) -> Option<egui::Rect> {
-        self.reservations.borrow_mut().push(width);
+    fn reserve_edge(&self, side: DockSide, width: Option<f32>) -> Option<egui::Rect> {
+        self.reservations.borrow_mut().push((side, width));
         self.edge
     }
     fn take_window_changes(&self) -> Option<bool> {

@@ -1,5 +1,5 @@
 use crate::app::{ContextMenuTarget, LauncherApp};
-use crate::config::{PopupDirection, ProcessTool};
+use crate::config::{DockSide, PopupDirection, ProcessTool};
 use crate::layout::{
     directional_tooltip, format_date_time, next_repaint, settings_dialog_position, POLL_INTERVAL,
     SETTINGS_WIDTH,
@@ -142,14 +142,14 @@ impl LauncherApp {
                     egui::Sense::click(),
                 );
                 paint_metallic_background(ui, area);
-                ui.vertical_centered(|ui| self.dock_contents(ui, ctx));
+                ui.vertical_centered(|ui| self.dock_contents(ui));
                 if background.secondary_clicked() {
                     self.open_context_menu(ContextMenuTarget::Handle);
                 }
             });
     }
 
-    fn dock_contents(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+    fn dock_contents(&mut self, ui: &mut egui::Ui) {
         let (date, weekday, time) = format_date_time(self.platform.local_time());
         let clock = ui
             .vertical_centered(|ui| {
@@ -172,7 +172,6 @@ impl LauncherApp {
             self.open_context_menu(ContextMenuTarget::Clock);
         }
         ui.add_space(3.0);
-        self.move_handle(ui, ctx);
         self.collapse_button(ui);
         ui.add_space(3.0);
         self.settings_button(ui);
@@ -186,7 +185,7 @@ impl LauncherApp {
             ui.add_space(4.0);
             ui.separator();
             ui.add_space(4.0);
-            let scroll_height = (ui.available_height() - 18.0).max(40.0);
+            let scroll_height = (ui.available_height() - 6.0).max(40.0);
             egui::ScrollArea::vertical()
                 .id_salt("running-items")
                 .max_height(scroll_height)
@@ -196,43 +195,6 @@ impl LauncherApp {
                         self.running_button(ui, index);
                     }
                 });
-        }
-        let (grip, resize) = ui.allocate_exact_size(egui::vec2(40.0, 12.0), egui::Sense::drag());
-        label_widget(&resize, "サイズ変更");
-        ui.painter().line_segment(
-            [
-                egui::pos2(grip.center().x - 8.0, grip.center().y),
-                egui::pos2(grip.center().x + 8.0, grip.center().y),
-            ],
-            egui::Stroke::new(2.0_f32, Color32::from_gray(120)),
-        );
-        if resize.drag_started() {
-            ctx.send_viewport_cmd(egui::ViewportCommand::BeginResize(
-                egui::ResizeDirection::South,
-            ));
-        }
-    }
-
-    /// Dockを移動するつまみ。右クリックでDockのメニューも開く。
-    fn move_handle(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
-        // 右クリックでメニューも開けるよう、ドラッグに加えてクリックも受け付ける。
-        let (handle, drag) =
-            ui.allocate_exact_size(egui::vec2(40.0, 14.0), egui::Sense::click_and_drag());
-        label_widget(&drag, "移動ハンドル");
-        for offset in [-6.0, 0.0, 6.0] {
-            ui.painter().circle_filled(
-                egui::pos2(handle.center().x + offset, handle.center().y),
-                1.5,
-                Color32::from_gray(145),
-            );
-        }
-        // 移動はWindows標準のドラッグに任せる。最大化・全画面化は keep_window_state で元に戻し、
-        // 幅は起動時に54pxへ固定しているので、スナップで横に広がることもない。
-        if drag.drag_started() {
-            ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
-        }
-        if drag.secondary_clicked() {
-            self.open_context_menu(ContextMenuTarget::Handle);
         }
     }
 
@@ -276,7 +238,7 @@ impl LauncherApp {
             egui::ViewportBuilder::default()
                 .with_title("Windows Side Dock 設定")
                 .with_icon(app_icon())
-                .with_inner_size([SETTINGS_WIDTH, 430.0])
+                .with_inner_size([SETTINGS_WIDTH, 560.0])
                 .with_min_inner_size([360.0, 400.0])
                 .with_position(position)
                 .with_resizable(false)
@@ -311,6 +273,14 @@ impl LauncherApp {
         ui.add_space(8.0);
         ui.label("文字サイズ");
         ui.add(egui::Slider::new(&mut self.font_size, 10.0..=20.0).suffix(" px"));
+        ui.add_space(8.0);
+        ui.label("Dockの位置");
+        let mut side = self.dock_side;
+        ui.radio_value(&mut side, DockSide::Right, "右端");
+        ui.radio_value(&mut side, DockSide::Left, "左端");
+        if side != self.dock_side {
+            self.set_dock_side(side);
+        }
         ui.add_space(8.0);
         ui.label("ポップアップの方向");
         let mut direction = self.popup_direction;

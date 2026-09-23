@@ -1,6 +1,6 @@
 use super::*;
 use crate::app::new_item;
-use crate::config::{temp_root, ConfigStore};
+use crate::config::{temp_root, ConfigStore, DockSide};
 use crate::model::{LauncherItem, RunningWindow};
 use crate::platform::fake::FakePlatform;
 use egui_kittest::kittest::Queryable;
@@ -85,44 +85,6 @@ fn press(
         modifiers: egui::Modifiers::NONE,
     });
     step_commands(harness)
-}
-
-/// ラベルの付いた部品をドラッグし、途中の各フレームで出たウィンドウ操作をまとめて返す。
-fn drag(
-    harness: &mut Harness<'static, LauncherApp>,
-    label: &str,
-    delta: egui::Vec2,
-) -> Vec<egui::ViewportCommand> {
-    let start = harness.get_by_label(label).rect().center();
-    let mut commands = Vec::new();
-    harness
-        .input_mut()
-        .events
-        .push(egui::Event::PointerMoved(start));
-    commands.extend(step_commands(harness));
-    harness.input_mut().events.push(egui::Event::PointerButton {
-        pos: start,
-        button: egui::PointerButton::Primary,
-        pressed: true,
-        modifiers: egui::Modifiers::NONE,
-    });
-    commands.extend(step_commands(harness));
-    for step in 1..=4 {
-        let pos = start + delta * (step as f32 / 4.0);
-        harness
-            .input_mut()
-            .events
-            .push(egui::Event::PointerMoved(pos));
-        commands.extend(step_commands(harness));
-    }
-    harness.input_mut().events.push(egui::Event::PointerButton {
-        pos: start + delta,
-        button: egui::PointerButton::Primary,
-        pressed: false,
-        modifiers: egui::Modifiers::NONE,
-    });
-    commands.extend(step_commands(harness));
-    commands
 }
 
 #[test]
@@ -232,17 +194,6 @@ fn opens_process_tool_menu_from_clock() {
 }
 
 #[test]
-fn opens_dock_menu_from_move_handle() {
-    let (mut harness, _platform) = dock("dock-handle-menu");
-    harness.get_by_label("移動ハンドル").click_secondary();
-    harness.step();
-    assert_eq!(
-        harness.state().context_menu.map(|menu| menu.0),
-        Some(ContextMenuTarget::Handle)
-    );
-}
-
-#[test]
 fn opens_dock_menu_from_empty_background() {
     let (mut harness, _platform) = dock("dock-background");
     secondary_click_at(&mut harness, egui::pos2(27.0, 700.0));
@@ -250,22 +201,6 @@ fn opens_dock_menu_from_empty_background() {
         harness.state().context_menu.map(|menu| menu.0),
         Some(ContextMenuTarget::Handle)
     );
-}
-
-#[test]
-fn moves_the_dock_with_the_native_window_drag() {
-    let (mut harness, _platform) = dock("dock-drag");
-    let commands = drag(&mut harness, "移動ハンドル", egui::vec2(-30.0, 20.0));
-    assert!(commands.contains(&egui::ViewportCommand::StartDrag));
-}
-
-#[test]
-fn starts_resizing_from_the_grip() {
-    let (mut harness, _platform) = dock("dock-resize");
-    let commands = drag(&mut harness, "サイズ変更", egui::vec2(0.0, 20.0));
-    assert!(commands.contains(&egui::ViewportCommand::BeginResize(
-        egui::ResizeDirection::South
-    )));
 }
 
 #[test]
@@ -597,7 +532,10 @@ fn with_edge() -> FakePlatform {
 fn reserves_the_right_edge_and_collapses_into_a_tab() {
     let (app, platform) = app_with(with_edge(), "dock-edge");
     let mut harness = harness(app);
-    assert_eq!(*platform.reservations.borrow(), [Some(78.0)]);
+    assert_eq!(
+        *platform.reservations.borrow(),
+        [(DockSide::Right, Some(78.0))]
+    );
     harness.state_mut().applied_collapsed = None;
     let commands = step_commands(&mut harness);
     assert!(
@@ -612,7 +550,10 @@ fn reserves_the_right_edge_and_collapses_into_a_tab() {
     let commands = step_commands(&mut harness);
     assert!(harness.state().collapsed);
     assert!(commands.contains(&egui::ViewportCommand::InnerSize(egui::vec2(12.0, 1032.0))));
-    assert_eq!(platform.reservations.borrow().last(), Some(&Some(12.0)));
+    assert_eq!(
+        platform.reservations.borrow().last(),
+        Some(&(DockSide::Right, Some(12.0)))
+    );
     harness.run();
     assert!(harness.query_by_label("時計").is_none());
 
@@ -665,10 +606,29 @@ fn collapses_at_the_work_area_edge_when_the_edge_cannot_be_reserved() {
 }
 
 #[test]
+fn moves_the_dock_to_the_left_edge_from_settings() {
+    let (mut harness, platform) = settings("dock-side");
+    click(&mut harness, "左端");
+    harness.step();
+    assert_eq!(harness.state().dock_side, DockSide::Left);
+    assert_eq!(harness.state().config.load_dock_side(), DockSide::Left);
+    assert_eq!(
+        platform.reservations.borrow().last(),
+        Some(&(DockSide::Left, Some(78.0)))
+    );
+    harness.state_mut().collapsed = true;
+    harness.run();
+    assert!(harness.query_by_label("Dockを引き出す").is_some());
+    harness.state_mut().collapsed = false;
+    harness.run();
+    assert!(harness.query_by_label("Dockをしまう").is_some());
+}
+
+#[test]
 fn releases_the_edge_on_exit() {
     let (mut app, platform) = app_with(with_edge(), "dock-edge-exit");
     eframe::App::on_exit(&mut app, None);
-    assert_eq!(*platform.reservations.borrow(), [None]);
+    assert_eq!(*platform.reservations.borrow(), [(DockSide::Right, None)]);
 }
 
 #[test]

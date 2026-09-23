@@ -1,4 +1,4 @@
-use crate::config::{ConfigStore, PopupDirection, ProcessTool};
+use crate::config::{ConfigStore, DockSide, PopupDirection, ProcessTool};
 use crate::layout::{popup_alignment, window_picker_screen_position};
 use crate::model::{
     assign_running, item_name_for_path, registered_entries, IconKind, LauncherItem, RunningWindow,
@@ -39,6 +39,8 @@ pub(crate) struct LauncherApp {
     pub(crate) always_on_top: bool,
     /// Dockのウィンドウへ最後に反映した「常に手前」の状態。まだなら `None`。
     pub(crate) applied_always_on_top: Option<bool>,
+    /// Dockを置く画面の端。
+    pub(crate) dock_side: DockSide,
     /// Dockを画面の端へしまっているか。
     pub(crate) collapsed: bool,
     /// 画面の端の確保とDockの大きさへ最後に反映した `collapsed`。まだなら `None`。
@@ -108,6 +110,7 @@ impl LauncherApp {
             popup_direction: config.load_popup_direction(),
             always_on_top: config.load_always_on_top(),
             applied_always_on_top: None,
+            dock_side: config.load_dock_side(),
             collapsed: false,
             applied_collapsed: None,
             context_menu: None,

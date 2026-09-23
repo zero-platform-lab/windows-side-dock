@@ -2,6 +2,7 @@
 //! 実行中のプログラム起動・実ウィンドウ操作・レジストリ書き込み・モーダルダイアログを伴うため、
 //! 自動テストとカバレッジ計測の対象外にしている（`main.rs` の `coverage(off)`）。
 
+use crate::config::DockSide;
 use crate::platform::{LocalTime, Platform, TrayAction};
 use crate::win32_tray::TrayQueue;
 use eframe::egui;
@@ -223,10 +224,10 @@ impl Platform for WindowsPlatform {
         self.tray_actions.lock().ok()?.pop_front()
     }
 
-    fn reserve_right_edge(&self, width: Option<f32>) -> Option<egui::Rect> {
+    fn reserve_edge(&self, side: DockSide, width: Option<f32>) -> Option<egui::Rect> {
         let window = dock_window();
         match width {
-            Some(width) => crate::win32_appbar::reserve_right_edge(window, width.round() as i32),
+            Some(width) => crate::win32_appbar::reserve_edge(window, side, width.round() as i32),
             None => {
                 crate::win32_appbar::release(window);
                 None

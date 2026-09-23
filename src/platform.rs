@@ -1,3 +1,4 @@
+use crate::config::DockSide;
 use crate::model::{group_windows, IconKind, LauncherItem, RunningWindow};
 use eframe::egui;
 use std::collections::HashMap;
@@ -54,9 +55,9 @@ pub(crate) trait Platform {
     /// ほかのアプリのウィンドウの変化を見張れていれば、前回の呼び出しから変化があったか。
     /// 見張れていなければ `None` で、呼び出し側が定期的に確認する。
     fn take_window_changes(&self) -> Option<bool>;
-    /// Dockのウィンドウがあるモニターの右端を `width` 物理ピクセルだけ確保し、Dockを置ける範囲を返す。
-    /// `None` を渡すと確保をやめる。確保できなければ `None` を返す。
-    fn reserve_right_edge(&self, width: Option<f32>) -> Option<egui::Rect>;
+    /// Dockのウィンドウがあるモニターの `side` の端を `width` 物理ピクセルだけ確保し、
+    /// Dockを置ける範囲を返す。`width` に `None` を渡すと確保をやめる。確保できなければ `None`。
+    fn reserve_edge(&self, side: DockSide, width: Option<f32>) -> Option<egui::Rect>;
 }
 
 /// 実行ファイルのパスごとに取り出したアイコン。取り出せなかったことも覚えておく。
@@ -165,7 +166,7 @@ impl Platform for NullPlatform {
     fn take_window_changes(&self) -> Option<bool> {
         None
     }
-    fn reserve_right_edge(&self, _width: Option<f32>) -> Option<egui::Rect> {
+    fn reserve_edge(&self, _side: DockSide, _width: Option<f32>) -> Option<egui::Rect> {
         None
     }
 }
