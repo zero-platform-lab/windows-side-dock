@@ -602,7 +602,7 @@ impl LauncherApp {
             egui::ViewportId::from_hash_of("launcher-window-picker"),
             egui::ViewportBuilder::default()
                 .with_title(format!("{name} のウィンドウ"))
-                .with_inner_size([360.0, height])
+                .with_inner_size([480.0, height])
                 .with_position(position)
                 .with_resizable(false)
                 .with_taskbar(false)
@@ -616,19 +616,23 @@ impl LauncherApp {
                 }
                 egui::CentralPanel::default().show(picker_ctx, |ui| {
                     ui.heading(&name);
-                    ui.label(format!("{}個のウィンドウ", windows.len()));
+                    ui.label(format!(
+                        "{}個のウィンドウ — 現在のタイトルで選択",
+                        windows.len()
+                    ));
                     ui.separator();
                     egui::ScrollArea::vertical()
                         .max_height((height - 105.0).max(60.0))
                         .show(ui, |ui| {
-                            for window in &windows {
-                                if ui
+                            for (index, window) in windows.iter().enumerate() {
+                                let label = format!("{}.  {}", index + 1, window.title);
+                                let response = ui
                                     .add_sized(
                                         [ui.available_width(), 32.0],
-                                        egui::Button::new(&window.title),
+                                        egui::Button::new(label),
                                     )
-                                    .clicked()
-                                {
+                                    .on_hover_text(&window.title);
+                                if response.clicked() {
                                     activate_taskbar_item(std::slice::from_ref(window));
                                     close = true;
                                 }
