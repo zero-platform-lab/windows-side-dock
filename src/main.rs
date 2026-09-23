@@ -693,14 +693,14 @@ impl LauncherApp {
             ContextMenuTarget::Clock => 54.0,
             ContextMenuTarget::Pinned(index) => {
                 match self.items.get(index).map(|item| item.windows.len()) {
-                    Some(count) if count > 1 => (112.0 + count as f32 * 34.0).min(420.0),
+                    Some(count) if count > 1 => (146.0 + count as f32 * 34.0).min(420.0),
                     Some(1) => 150.0,
                     _ => 102.0,
                 }
             }
             ContextMenuTarget::Running(index) => {
                 match self.running.get(index).map(|item| item.windows.len()) {
-                    Some(count) if count > 1 => (78.0 + count as f32 * 34.0).min(420.0),
+                    Some(count) if count > 1 => (112.0 + count as f32 * 34.0).min(420.0),
                     Some(1) => 116.0,
                     _ => 102.0,
                 }
@@ -815,7 +815,7 @@ impl LauncherApp {
                                     }
                                 } else {
                                     egui::ScrollArea::vertical()
-                                        .max_height((height - 105.0).max(68.0))
+                                        .max_height((height - 139.0).max(68.0))
                                         .show(ui, |ui| {
                                             for window in &windows {
                                                 if left_aligned_button(ui, &window.title, 30.0)
@@ -829,6 +829,20 @@ impl LauncherApp {
                                                 }
                                             }
                                         });
+                                    if self.confirm_close_all {
+                                        if ui
+                                            .button(
+                                                egui::RichText::new("本当にすべて閉じる")
+                                                    .color(Color32::from_rgb(255, 120, 120)),
+                                            )
+                                            .clicked()
+                                        {
+                                            close_all_windows(&windows);
+                                            close = true;
+                                        }
+                                    } else if ui.button("すべて閉じる").clicked() {
+                                        self.confirm_close_all = true;
+                                    }
                                 }
                             }
                             ui.separator();
@@ -863,7 +877,7 @@ impl LauncherApp {
                                 }
                             } else {
                                 egui::ScrollArea::vertical()
-                                    .max_height((height - 71.0).max(68.0))
+                                    .max_height((height - 105.0).max(68.0))
                                     .show(ui, |ui| {
                                         for window in &windows {
                                             if left_aligned_button(ui, &window.title, 30.0)
@@ -875,6 +889,20 @@ impl LauncherApp {
                                             }
                                         }
                                     });
+                                if self.confirm_close_all {
+                                    if ui
+                                        .button(
+                                            egui::RichText::new("本当にすべて閉じる")
+                                                .color(Color32::from_rgb(255, 120, 120)),
+                                        )
+                                        .clicked()
+                                    {
+                                        close_all_windows(&windows);
+                                        close = true;
+                                    }
+                                } else if ui.button("すべて閉じる").clicked() {
+                                    self.confirm_close_all = true;
+                                }
                             }
                             ui.separator();
                             if ui.button("ピン留めする").clicked() {
@@ -890,6 +918,7 @@ impl LauncherApp {
         );
         if close {
             self.context_menu = None;
+            self.confirm_close_all = false;
         }
     }
 
