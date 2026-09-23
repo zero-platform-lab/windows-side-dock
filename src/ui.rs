@@ -161,3 +161,21 @@ pub(crate) fn dock_directory() -> Option<PathBuf> {
         .ok()
         .and_then(|path| path.parent().map(Path::to_path_buf))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn strips_whitespace_and_quotes_from_executable_path() {
+        assert_eq!(
+            normalized_executable_path(" \"E:\\Tools\\procexp.exe\"\n"),
+            r"E:\Tools\procexp.exe"
+        );
+        assert_eq!(
+            normalized_executable_path(r"'C:\a b\x.exe'"),
+            r"C:\a b\x.exe"
+        );
+        assert_eq!(normalized_executable_path("   "), "");
+    }
+}
