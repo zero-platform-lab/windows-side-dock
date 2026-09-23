@@ -83,12 +83,12 @@ fn sizes_menus_by_target_and_window_count() {
     use ContextMenuTarget::*;
     assert_eq!(menu_size(Handle, None), (210.0, 156.0));
     assert_eq!(menu_size(Clock, None), (210.0, 54.0));
-    assert_eq!(menu_size(Pinned(0), Some(0)), (210.0, 102.0));
-    assert_eq!(menu_size(Pinned(0), Some(1)), (430.0, 150.0));
-    assert_eq!(menu_size(Pinned(0), Some(3)), (430.0, 248.0));
-    assert_eq!(menu_size(Running(0), None), (210.0, 102.0));
-    assert_eq!(menu_size(Running(0), Some(1)), (430.0, 116.0));
-    assert_eq!(menu_size(Running(0), Some(20)), (430.0, 420.0));
+    assert_eq!(menu_size(Pinned(0), Some(0)), (210.0, 182.0));
+    assert_eq!(menu_size(Pinned(0), Some(1)), (430.0, 230.0));
+    assert_eq!(menu_size(Pinned(0), Some(3)), (430.0, 328.0));
+    assert_eq!(menu_size(Running(0), None), (210.0, 182.0));
+    assert_eq!(menu_size(Running(0), Some(1)), (430.0, 196.0));
+    assert_eq!(menu_size(Running(0), Some(20)), (430.0, 500.0));
 }
 
 #[test]
@@ -252,6 +252,41 @@ fn pinned_menu_switches_to_one_of_many_windows() {
     let mut harness = harness(app);
     click(&mut harness, "window 42");
     assert_eq!(platform.calls(), ["foreground 42"]);
+}
+
+#[test]
+fn pinned_menu_runs_as_admin_opens_location_and_shows_properties() {
+    let (mut harness, platform) = menu_harness(
+        "menu-file-actions",
+        FakePlatform::default(),
+        ContextMenuTarget::Pinned(4),
+    );
+    for label in ["管理者として実行", "ファイルの場所を開く", "プロパティ"] {
+        open_menu(harness.state_mut(), ContextMenuTarget::Pinned(4));
+        harness.run();
+        click(&mut harness, label);
+        assert!(harness.state().context_menu.is_none());
+    }
+    assert_eq!(
+        platform.calls(),
+        [
+            r"RunAsAdmin C:\Apps\Code.exe",
+            r"OpenLocation C:\Apps\Code.exe",
+            r"Properties C:\Apps\Code.exe",
+        ]
+    );
+}
+
+#[test]
+fn running_menu_shows_file_actions() {
+    let (mut harness, platform) = menu_harness(
+        "menu-running-file-actions",
+        FakePlatform::default(),
+        ContextMenuTarget::Running(0),
+    );
+    click(&mut harness, "プロパティ");
+    assert_eq!(platform.calls(), ["Properties Chrome"]);
+    assert!(harness.state().context_menu.is_none());
 }
 
 #[test]
@@ -438,7 +473,7 @@ fn limits_menu_height_and_keeps_long_window_lists_scrollable() {
     open_menu(&mut app, ContextMenuTarget::Pinned(4));
     let mut harness = harness(app);
     harness.step();
-    assert!(harness.state().context_menu_size.unwrap().y <= 420.0);
+    assert!(harness.state().context_menu_size.unwrap().y <= 500.0);
     click(&mut harness, "window 1");
     assert_eq!(platform.calls(), ["foreground 1"]);
 }

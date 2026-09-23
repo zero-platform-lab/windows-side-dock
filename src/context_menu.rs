@@ -2,8 +2,9 @@ use crate::app::{ContextMenuTarget, LauncherApp};
 use crate::config::ProcessTool;
 use crate::layout::{CONTEXT_MENU_WIDTH, WINDOW_PICKER_WIDTH};
 use crate::model::{RunningWindow, BUILTIN_ITEM_COUNT};
-use crate::platform::{activate_windows, close_windows};
+use crate::platform::{activate_windows, close_windows, FileAction};
 use crate::theme::left_aligned_button;
+use crate::ui::normalized_executable_path;
 use eframe::egui::{self, Color32, Key};
 use std::time::Duration;
 
@@ -23,16 +24,16 @@ fn menu_size(target: ContextMenuTarget, window_count: Option<usize>) -> (f32, f3
     let (single, multiple_base) = match target {
         ContextMenuTarget::Handle => return (CONTEXT_MENU_WIDTH, 156.0),
         ContextMenuTarget::Clock => return (CONTEXT_MENU_WIDTH, 54.0),
-        ContextMenuTarget::Pinned(_) => (150.0, 146.0),
-        ContextMenuTarget::Running(_) => (116.0, 112.0),
+        ContextMenuTarget::Pinned(_) => (230.0, 226.0),
+        ContextMenuTarget::Running(_) => (196.0, 192.0),
     };
     match window_count {
         Some(count) if count > 1 => (
             WINDOW_MENU_WIDTH,
-            (multiple_base + count as f32 * 34.0).min(420.0),
+            (multiple_base + count as f32 * 34.0).min(500.0),
         ),
         Some(1) => (WINDOW_MENU_WIDTH, single),
-        _ => (CONTEXT_MENU_WIDTH, 102.0),
+        _ => (CONTEXT_MENU_WIDTH, 182.0),
     }
 }
 
@@ -173,6 +174,7 @@ impl LauncherApp {
                     return true;
                 };
                 let windows = item.windows.clone();
+                let command = item.command.clone();
                 let launch_label = if windows.is_empty() {
                     "起動"
                 } else {
@@ -182,7 +184,7 @@ impl LauncherApp {
                     self.launch(index);
                     return true;
                 }
-                if !windows.is_empty() && self.window_menu(ui, &windows, (height - 139.0).max(68.0))
+                if !windows.is_empty() && self.window_menu(ui, &windows, (height - 219.0).max(68.0))
                 {
                     return true;
                 }
@@ -191,6 +193,10 @@ impl LauncherApp {
                     ui.add_enabled(false, egui::Button::new("標準アイコン"));
                     return false;
                 }
+                if self.file_action_buttons(ui, &command) {
+                    return true;
+                }
+                ui.separator();
                 let unpin = ui.button("ピン留めを外す").clicked();
                 if unpin {
                     self.unpin(index);
@@ -202,7 +208,12 @@ impl LauncherApp {
                     return true;
                 };
                 let windows = item.windows.clone();
-                if self.window_menu(ui, &windows, (height - 105.0).max(68.0)) {
+                let command = item.command.clone();
+                if self.window_menu(ui, &windows, (height - 185.0).max(68.0)) {
+                    return true;
+                }
+                ui.separator();
+                if self.file_action_buttons(ui, &command) {
                     return true;
                 }
                 ui.separator();
@@ -213,6 +224,22 @@ impl LauncherApp {
                 pin
             }
         }
+    }
+
+    /// エクスプローラーの右クリックメニューと同じ操作のボタン。押されたら `true`。
+    fn file_action_buttons(&mut self, ui: &mut egui::Ui, command: &str) -> bool {
+        let path = normalized_executable_path(command);
+        for (label, action) in [
+            ("管理者として実行", FileAction::RunAsAdmin),
+            ("ファイルの場所を開く", FileAction::OpenLocation),
+            ("プロパティ", FileAction::Properties),
+        ] {
+            if ui.button(label).clicked() {
+                self.platform.file_action(action, &path);
+                return true;
+            }
+        }
+        false
     }
 
     pub(crate) fn show_context_menu_viewport(&mut self, ctx: &egui::Context) {

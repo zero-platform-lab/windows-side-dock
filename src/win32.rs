@@ -3,7 +3,7 @@
 //! 自動テストとカバレッジ計測の対象外にしている（`main.rs` の `coverage(off)`）。
 
 use crate::config::DockSide;
-use crate::platform::{LocalTime, Platform, TrayAction};
+use crate::platform::{FileAction, LocalTime, Platform, TrayAction};
 use crate::win32_tray::TrayQueue;
 use eframe::egui;
 use std::ffi::OsStr;
@@ -48,6 +48,51 @@ impl Platform for WindowsPlatform {
                 SW_SHOWNORMAL,
             ) as isize
                 > 32
+        }
+    }
+
+    fn file_action(&self, action: FileAction, path: &str) -> bool {
+        use windows_sys::Win32::UI::Shell::{
+            ShellExecuteExW, ShellExecuteW, SEE_MASK_INVOKEIDLIST, SHELLEXECUTEINFOW,
+        };
+        use windows_sys::Win32::UI::WindowsAndMessaging::{SW_SHOW, SW_SHOWNORMAL};
+        let run = |operation: &str, file: &str, parameters: Option<String>| {
+            let operation = wide(operation);
+            let file = wide(file);
+            let parameters = parameters.map(|value| wide(&value));
+            unsafe {
+                ShellExecuteW(
+                    std::ptr::null_mut(),
+                    operation.as_ptr(),
+                    file.as_ptr(),
+                    parameters
+                        .as_ref()
+                        .map_or(std::ptr::null(), |value| value.as_ptr()),
+                    std::ptr::null(),
+                    SW_SHOWNORMAL,
+                ) as isize
+                    > 32
+            }
+        };
+        match action {
+            FileAction::RunAsAdmin => run("runas", path, None),
+            FileAction::OpenLocation => {
+                run("open", "explorer.exe", Some(format!("/select,\"{path}\"")))
+            }
+            FileAction::Properties => {
+                // プロパティ画面はエクスプローラーと同じもの。閉じるまでDockのプロセスが持つ。
+                let verb = wide("properties");
+                let file = wide(path);
+                let mut info = SHELLEXECUTEINFOW {
+                    cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,
+                    fMask: SEE_MASK_INVOKEIDLIST,
+                    lpVerb: verb.as_ptr(),
+                    lpFile: file.as_ptr(),
+                    nShow: SW_SHOW,
+                    ..Default::default()
+                };
+                unsafe { ShellExecuteExW(&mut info) != 0 }
+            }
         }
     }
 

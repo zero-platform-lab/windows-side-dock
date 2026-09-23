@@ -24,10 +24,19 @@ pub(crate) enum TrayAction {
     Quit,
 }
 
+/// 実行ファイルやショートカットに対する、エクスプローラーの右クリックメニューと同じ操作。
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum FileAction {
+    RunAsAdmin,
+    OpenLocation,
+    Properties,
+}
+
 /// OSへの問い合わせと操作。実装は `win32.rs`、テストでは記録用の偽物を使う。
 /// 判断を伴う処理はここへ置かず、呼び出し側の関数でテストする。
 pub(crate) trait Platform {
     fn open_target(&self, target: &str) -> bool;
+    fn file_action(&self, action: FileAction, path: &str) -> bool;
     /// 表示中でタイトルを持つ他プロセスのウィンドウ `(ハンドル, 実行ファイル, タイトル)`。
     fn visible_windows(&self) -> Vec<(isize, String, String)>;
     fn foreground_window(&self) -> isize;
@@ -110,6 +119,9 @@ pub(crate) struct NullPlatform;
 #[cfg(not(windows))]
 impl Platform for NullPlatform {
     fn open_target(&self, _target: &str) -> bool {
+        false
+    }
+    fn file_action(&self, _action: FileAction, _path: &str) -> bool {
         false
     }
     fn visible_windows(&self) -> Vec<(isize, String, String)> {

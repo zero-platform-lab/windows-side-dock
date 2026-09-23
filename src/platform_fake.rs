@@ -1,6 +1,6 @@
 //! テスト用の偽のOS。操作を `calls` に記録し、問い合わせの戻り値はフィールドで指定する。
 
-use super::{LocalTime, Platform, TrayAction};
+use super::{FileAction, LocalTime, Platform, TrayAction};
 use crate::config::DockSide;
 use eframe::egui;
 use std::cell::{Cell, RefCell};
@@ -83,6 +83,10 @@ impl Platform for FakePlatform {
     fn open_target(&self, target: &str) -> bool {
         self.record(format!("open {target}"));
         self.open_succeeds
+    }
+    fn file_action(&self, action: FileAction, path: &str) -> bool {
+        self.record(format!("{action:?} {path}"));
+        true
     }
     fn visible_windows(&self) -> Vec<(isize, String, String)> {
         self.windows.borrow().clone()
