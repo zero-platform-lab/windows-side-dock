@@ -1,5 +1,6 @@
 use crate::model::{group_windows, IconKind, LauncherItem, RunningWindow};
 use eframe::egui;
+use std::collections::HashMap;
 
 /// Windowsのローカル時刻のうち、Dockの時計に使う値。`weekday` は日曜を0とする。
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -9,6 +10,7 @@ pub(crate) struct LocalTime {
     pub(crate) weekday: u16,
     pub(crate) hour: u16,
     pub(crate) minute: u16,
+    pub(crate) second: u16,
 }
 
 /// タスクトレイのメニューから届く操作。Dockの表示切り替えはOS側で直接行うため含まない。
@@ -47,13 +49,23 @@ pub(crate) trait Platform {
     fn set_registry_string(&self, key: &str, subkey: &str, name: &str, value: &str);
     /// タスクトレイから届いた操作を古い順に1つ取り出す。
     fn take_tray_action(&self) -> Option<TrayAction>;
+    /// ほかのアプリのウィンドウの変化を見張れていれば、前回の呼び出しから変化があったか。
+    /// 見張れていなければ `None` で、呼び出し側が定期的に確認する。
+    fn take_window_changes(&self) -> Option<bool>;
 }
 
-pub(crate) fn running_apps(platform: &dyn Platform) -> Vec<LauncherItem> {
+/// 実行ファイルのパスごとに取り出したアイコン。取り出せなかったことも覚えておく。
+pub(crate) type IconCache = HashMap<String, Option<egui::ColorImage>>;
+
+/// 実行中のアプリの一覧。アイコンの取り出しは重いため、一度取り出したものは `icons` から使う。
+pub(crate) fn running_apps(platform: &dyn Platform, icons: &mut IconCache) -> Vec<LauncherItem> {
     group_windows(platform.visible_windows(), platform.foreground_window())
         .into_iter()
         .map(|group| LauncherItem {
-            icon: platform.load_icon(&group.command),
+            icon: icons
+                .entry(group.command.clone())
+                .or_insert_with(|| platform.load_icon(&group.command))
+                .clone(),
             name: group.name,
             command: group.command,
             fallback_icon: IconKind::File,
@@ -129,6 +141,7 @@ impl Platform for NullPlatform {
             weekday: 0,
             hour: 0,
             minute: 0,
+            second: 0,
         }
     }
     fn choose_executable(&self) -> Option<String> {
@@ -142,6 +155,9 @@ impl Platform for NullPlatform {
     }
     fn set_registry_string(&self, _key: &str, _subkey: &str, _name: &str, _value: &str) {}
     fn take_tray_action(&self) -> Option<TrayAction> {
+        None
+    }
+    fn take_window_changes(&self) -> Option<bool> {
         None
     }
 }
@@ -181,12 +197,26 @@ mod tests {
                 "b - Visual Studio Code".into(),
             ),
         ]);
-        let apps = running_apps(&platform);
+        let mut icons = IconCache::new();
+        let apps = running_apps(&platform, &mut icons);
         assert_eq!(apps.len(), 1);
         assert_eq!(apps[0].name, "Visual Studio Code");
         assert!(apps[0].icon.is_some());
         assert!(apps[0].active);
         assert_eq!(apps[0].windows.len(), 2);
+        assert!(icons[r"C:\Apps\Code.exe"].is_some());
+    }
+
+    #[test]
+    fn reuses_icons_already_loaded() {
+        let platform = FakePlatform::default();
+        platform
+            .windows
+            .replace(vec![(1, r"C:\Apps\Code.exe".into(), "Code".into())]);
+        let cached = egui::ColorImage::filled([1, 1], egui::Color32::BLUE);
+        let mut icons = IconCache::from([(r"C:\Apps\Code.exe".to_owned(), Some(cached.clone()))]);
+        let apps = running_apps(&platform, &mut icons);
+        assert_eq!(apps[0].icon, Some(cached));
     }
 
     #[test]

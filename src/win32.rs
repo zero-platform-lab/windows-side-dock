@@ -179,6 +179,7 @@ impl Platform for WindowsPlatform {
             weekday: time.wDayOfWeek,
             hour: time.wHour,
             minute: time.wMinute,
+            second: time.wSecond,
         }
     }
 
@@ -215,6 +216,10 @@ impl Platform for WindowsPlatform {
 
     fn take_tray_action(&self) -> Option<TrayAction> {
         self.tray_actions.lock().ok()?.pop_front()
+    }
+
+    fn take_window_changes(&self) -> Option<bool> {
+        crate::win32_events::take_changes()
     }
 
     fn registry_key_exists(&self, key: &str) -> bool {

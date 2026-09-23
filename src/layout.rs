@@ -158,6 +158,19 @@ pub(crate) fn directional_tooltip(
     );
 }
 
+/// 実行中アプリを数え直す間隔。ウィンドウの変化を見張れないときだけ使う。
+pub(crate) const POLL_INTERVAL: Duration = Duration::from_secs(1);
+
+/// 次に描き直すまでの時間。時計の分が変わる瞬間に合わせ、見張れないときは数え直す間隔も守る。
+pub(crate) fn next_repaint(time: LocalTime, watching: bool) -> Duration {
+    let until_next_minute = Duration::from_secs(u64::from(60 - time.second.min(59)));
+    if watching {
+        until_next_minute
+    } else {
+        until_next_minute.min(POLL_INTERVAL)
+    }
+}
+
 /// 時計に表示する日付、曜日、時刻。
 pub(crate) fn format_date_time(time: LocalTime) -> (String, String, String) {
     const WEEKDAYS: [&str; 7] = ["日", "月", "火", "水", "木", "金", "土"];
@@ -318,6 +331,23 @@ mod tests {
     }
 
     #[test]
+    fn repaints_when_the_minute_changes() {
+        let time = |second| LocalTime {
+            month: 9,
+            day: 3,
+            weekday: 6,
+            hour: 7,
+            minute: 5,
+            second,
+        };
+        assert_eq!(next_repaint(time(0), true), Duration::from_secs(60));
+        assert_eq!(next_repaint(time(45), true), Duration::from_secs(15));
+        // うるう秒の60秒目でも、次の分へ進むまで1秒待つ。
+        assert_eq!(next_repaint(time(60), true), Duration::from_secs(1));
+        assert_eq!(next_repaint(time(45), false), POLL_INTERVAL);
+    }
+
+    #[test]
     fn formats_clock_text() {
         let time = LocalTime {
             month: 9,
@@ -325,6 +355,7 @@ mod tests {
             weekday: 6,
             hour: 7,
             minute: 5,
+            second: 0,
         };
         assert_eq!(
             format_date_time(time),

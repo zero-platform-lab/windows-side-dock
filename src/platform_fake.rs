@@ -2,7 +2,7 @@
 
 use super::{LocalTime, Platform, TrayAction};
 use eframe::egui;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, VecDeque};
 
 pub(crate) struct FakePlatform {
@@ -24,6 +24,8 @@ pub(crate) struct FakePlatform {
     /// 書き込まれた値。キーは `key|subkey|name`。
     pub(crate) registry_values: RefCell<BTreeMap<String, String>>,
     pub(crate) tray_actions: RefCell<VecDeque<TrayAction>>,
+    /// `None` なら見張れない環境。`Some` なら取り出すたびに `Some(false)` へ戻る。
+    pub(crate) window_changes: Cell<Option<bool>>,
 }
 
 impl Default for FakePlatform {
@@ -48,12 +50,14 @@ impl Default for FakePlatform {
                 weekday: 3,
                 hour: 7,
                 minute: 5,
+                second: 0,
             },
             chosen_file: None,
             install_directory: Some(std::path::PathBuf::from(r"C:\Dock")),
             registry_keys: Vec::new(),
             registry_values: RefCell::default(),
             tray_actions: RefCell::default(),
+            window_changes: Cell::new(None),
         }
     }
 }
@@ -125,6 +129,13 @@ impl Platform for FakePlatform {
     }
     fn take_tray_action(&self) -> Option<TrayAction> {
         self.tray_actions.borrow_mut().pop_front()
+    }
+    fn take_window_changes(&self) -> Option<bool> {
+        let changes = self.window_changes.get();
+        if changes.is_some() {
+            self.window_changes.set(Some(false));
+        }
+        changes
     }
     fn set_registry_string(&self, key: &str, subkey: &str, name: &str, value: &str) {
         self.registry_values

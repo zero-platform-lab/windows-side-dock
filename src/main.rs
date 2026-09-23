@@ -17,6 +17,9 @@ mod ui;
 mod win32;
 #[cfg(windows)]
 #[cfg_attr(coverage_nightly, coverage(off))]
+mod win32_events;
+#[cfg(windows)]
+#[cfg_attr(coverage_nightly, coverage(off))]
 mod win32_tray;
 
 use app::LauncherApp;
@@ -94,6 +97,8 @@ fn main() -> eframe::Result {
                 &local_app_data,
             );
             app.tray = install_tray(&cc.egui_ctx, tray_actions);
+            #[cfg(windows)]
+            win32_events::watch_windows(&cc.egui_ctx);
             Ok(Box::new(app))
         }),
     )

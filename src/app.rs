@@ -4,14 +4,14 @@ use crate::model::{
     assign_running, item_name_for_path, registered_entries, IconKind, LauncherItem, RunningWindow,
     BUILTIN_ITEM_COUNT,
 };
-use crate::platform::{activate_windows, running_apps, Platform, TrayAction};
+use crate::platform::{activate_windows, running_apps, IconCache, Platform, TrayAction};
 use crate::shell_menu::sync_process_tool_menu;
 use crate::ui::normalized_executable_path;
 use eframe::egui;
 use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum ContextMenuTarget {
@@ -28,7 +28,10 @@ pub(crate) struct LauncherApp {
     pub(crate) running: Vec<LauncherItem>,
     pub(crate) selected: usize,
     pub(crate) textures: HashMap<String, egui::TextureHandle>,
-    pub(crate) last_refresh: Instant,
+    /// 実行中アプリの一覧を最後に数え直した時刻。まだなら `None`。
+    pub(crate) last_refresh: Option<Instant>,
+    /// 実行中アプリのアイコン。数え直すたびにexeから取り出さないよう覚えておく。
+    pub(crate) running_icons: IconCache,
     pub(crate) show_settings: bool,
     pub(crate) font_size: f32,
     pub(crate) popup_direction: PopupDirection,
@@ -90,7 +93,8 @@ impl LauncherApp {
             running: Vec::new(),
             selected: 0,
             textures: HashMap::new(),
-            last_refresh: Instant::now() - Duration::from_secs(2),
+            last_refresh: None,
+            running_icons: IconCache::new(),
             show_settings: false,
             font_size: 13.0,
             popup_direction: config.load_popup_direction(),
@@ -171,7 +175,8 @@ impl LauncherApp {
     }
 
     pub(crate) fn refresh_running(&mut self) {
-        self.running = assign_running(&mut self.items, running_apps(self.platform.as_ref()));
+        let discovered = running_apps(self.platform.as_ref(), &mut self.running_icons);
+        self.running = assign_running(&mut self.items, discovered);
     }
 
     pub(crate) fn pin_running(&mut self, index: usize) {

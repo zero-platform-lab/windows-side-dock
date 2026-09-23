@@ -1,7 +1,8 @@
 use crate::app::{ContextMenuTarget, LauncherApp};
 use crate::config::{PopupDirection, ProcessTool};
 use crate::layout::{
-    directional_tooltip, format_date_time, settings_dialog_position, SETTINGS_WIDTH,
+    directional_tooltip, format_date_time, next_repaint, settings_dialog_position, POLL_INTERVAL,
+    SETTINGS_WIDTH,
 };
 use crate::model::IconKind;
 use crate::theme::{app_icon, draw_icon_colored};
@@ -9,9 +10,7 @@ use crate::ui::normalized_executable_path;
 use eframe::egui::{self, Color32, Key};
 use eframe::{App, Frame};
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
-
-const REFRESH_INTERVAL: Duration = Duration::from_secs(1);
+use std::time::Instant;
 
 /// ボタン以外の操作部品を、支援技術とテストから名前で見つけられるようにする。
 fn label_widget(response: &egui::Response, name: &str) {
@@ -28,11 +27,19 @@ impl LauncherApp {
     /// 1フレーム分の処理。Dock本体と、開いている設定画面・メニューを描く。
     pub(crate) fn show(&mut self, ctx: &egui::Context) {
         self.keep_window_state(ctx);
-        if self.last_refresh.elapsed() >= REFRESH_INTERVAL {
+        // ウィンドウの変化を見張れていれば変化があったときだけ、見張れなければ一定間隔で数え直す。
+        let changes = self.platform.take_window_changes();
+        let due = match changes {
+            Some(changed) => changed || self.last_refresh.is_none(),
+            None => self
+                .last_refresh
+                .is_none_or(|at| at.elapsed() >= POLL_INTERVAL),
+        };
+        if due {
             self.refresh_running();
-            self.last_refresh = Instant::now();
+            self.last_refresh = Some(Instant::now());
         }
-        ctx.request_repaint_after(REFRESH_INTERVAL);
+        ctx.request_repaint_after(next_repaint(self.platform.local_time(), changes.is_some()));
         self.handle_tray_actions(ctx);
         self.handle_input(ctx);
         self.show_dock(ctx);

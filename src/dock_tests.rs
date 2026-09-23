@@ -5,7 +5,9 @@ use crate::model::{LauncherItem, RunningWindow};
 use crate::platform::fake::FakePlatform;
 use egui_kittest::kittest::Queryable;
 use egui_kittest::Harness;
+use std::cell::Cell;
 use std::rc::Rc;
+use std::time::Duration;
 
 fn app_with(platform: FakePlatform, test: &str) -> (LauncherApp, Rc<FakePlatform>) {
     let platform = Rc::new(platform);
@@ -137,6 +139,39 @@ fn shows_clock_and_refreshes_running_apps_once_per_second() {
     assert!(harness.query_by_label("07:05").is_some());
     assert_eq!(harness.state().running.len(), 1);
     platform.windows.replace(Vec::new());
+    harness.step();
+    assert_eq!(harness.state().running.len(), 1);
+}
+
+#[test]
+fn refreshes_running_apps_once_the_poll_interval_passes() {
+    let (app, platform) = app_with(FakePlatform::default(), "dock-poll");
+    let mut harness = harness(app);
+    platform
+        .windows
+        .replace(vec![(1, r"C:\Apps\Chrome.exe".into(), "Chrome".into())]);
+    harness.state_mut().last_refresh = Some(Instant::now() - Duration::from_secs(2));
+    harness.step();
+    assert_eq!(harness.state().running.len(), 1);
+}
+
+#[test]
+fn refreshes_running_apps_only_when_windows_change() {
+    let platform = FakePlatform {
+        window_changes: Cell::new(Some(false)),
+        ..Default::default()
+    };
+    let (app, platform) = app_with(platform, "dock-watch");
+    let mut harness = harness(app);
+    let first = harness.state().last_refresh;
+    assert!(first.is_some());
+    platform
+        .windows
+        .replace(vec![(1, r"C:\Apps\Chrome.exe".into(), "Chrome".into())]);
+    harness.state_mut().last_refresh = Some(Instant::now() - Duration::from_secs(2));
+    harness.step();
+    assert!(harness.state().running.is_empty());
+    platform.window_changes.set(Some(true));
     harness.step();
     assert_eq!(harness.state().running.len(), 1);
 }
