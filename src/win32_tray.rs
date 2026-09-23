@@ -54,27 +54,10 @@ fn request(queue: &TrayQueue, ctx: &egui::Context, action: TrayAction) {
     ctx.request_repaint();
 }
 
-/// 黒い角丸の縦長バーに、アイコンを表す明るい点を並べたトレイアイコン。
-fn tray_icon_image() -> Icon {
-    const SIZE: u32 = 32;
-    let mut rgba = vec![0_u8; (SIZE * SIZE * 4) as usize];
-    for y in 0..SIZE {
-        for x in 0..SIZE {
-            let inside_bar = (9..23).contains(&x) && (2..30).contains(&y);
-            let dot =
-                (13..19).contains(&x) && [6, 13, 20].iter().any(|top| (*top..top + 5).contains(&y));
-            let color = if dot {
-                [104, 220, 132, 255]
-            } else if inside_bar {
-                [36, 40, 48, 255]
-            } else {
-                [0, 0, 0, 0]
-            };
-            let offset = ((y * SIZE + x) * 4) as usize;
-            rgba[offset..offset + 4].copy_from_slice(&color);
-        }
-    }
-    Icon::from_rgba(rgba, SIZE, SIZE).expect("トレイアイコンの画像サイズが不正です")
+/// exeに埋め込んだアプリのアイコン（`assets/app.rc` の番号1）。
+/// 画面の拡大率に合った大きさをWindowsが選ぶ。
+fn tray_icon_image() -> Option<Icon> {
+    Icon::from_resource(1, None).ok()
 }
 
 /// トレイにアイコンを登録する。戻り値を破棄するとアイコンも消えるため、アプリが保持すること。
@@ -114,7 +97,7 @@ pub(crate) fn install_tray(ctx: egui::Context, queue: TrayQueue) -> Option<TrayI
         .with_menu(Box::new(menu))
         .with_menu_on_left_click(false)
         .with_tooltip("Windows Side Dock")
-        .with_icon(tray_icon_image())
+        .with_icon(tray_icon_image()?)
         .build()
         .ok()
 }

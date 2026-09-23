@@ -1,6 +1,6 @@
 [package]
 name = "windows-side-dock"
-version = "0.1.12"
+version = "0.1.13"
 edition = "2021"
 
 [dependencies]
@@ -23,3 +23,6 @@ egui_kittest = { version = "0.33", features = ["eframe"] }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(coverage_nightly)"] }
+
+[build-dependencies]
+embed-resource = "3.0.11"

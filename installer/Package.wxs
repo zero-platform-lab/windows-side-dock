@@ -10,6 +10,11 @@
     <MajorUpgrade
       AllowSameVersionUpgrades="yes"
       DowngradeErrorMessage="新しいバージョンの Windows Side Dock が既にインストールされています。" />
+
+    <!-- 「アプリと機能」に出すアイコン。 -->
+    <Icon Id="AppIcon" SourceFile="$(sys.SOURCEFILEDIR)..\assets\icon.ico" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon" />
+
     <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
 
     <StandardDirectory Id="PerUserProgramFilesFolder">

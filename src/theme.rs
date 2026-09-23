@@ -1,5 +1,20 @@
 use crate::model::IconKind;
 use eframe::egui::{self, Color32};
+use std::sync::{Arc, LazyLock};
+
+/// アプリのアイコン。`scripts/make-icon.py` が書き出した64px四方のRGBA。
+static APP_ICON: LazyLock<Arc<egui::IconData>> = LazyLock::new(|| {
+    Arc::new(egui::IconData {
+        rgba: include_bytes!("../assets/icon-64.rgba").to_vec(),
+        width: 64,
+        height: 64,
+    })
+});
+
+/// ウィンドウのタイトルバーやAlt+Tabに出すアイコン。
+pub(crate) fn app_icon() -> Arc<egui::IconData> {
+    APP_ICON.clone()
+}
 
 pub(crate) fn draw_icon(painter: &egui::Painter, rect: egui::Rect, icon: IconKind) {
     draw_icon_colored(painter, rect, icon, Color32::from_rgb(238, 242, 250));
@@ -159,6 +174,14 @@ pub(crate) fn japanese_fonts(path: &str) -> Option<egui::FontDefinitions> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn app_icon_matches_its_pixel_size() {
+        let icon = app_icon();
+        assert_eq!((icon.width, icon.height), (64, 64));
+        assert_eq!(icon.rgba.len(), 64 * 64 * 4);
+        assert!(Arc::ptr_eq(&icon, &app_icon()));
+    }
 
     #[test]
     fn puts_japanese_font_first_when_available() {

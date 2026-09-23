@@ -25,7 +25,7 @@ use eframe::egui;
 use layout::dock_geometry;
 use platform::Platform;
 use std::rc::Rc;
-use theme::{japanese_fonts, JAPANESE_FONT_PATH};
+use theme::{app_icon, japanese_fonts, JAPANESE_FONT_PATH};
 
 /// OSの実装と、タスクトレイの操作をその実装へ届ける待ち行列。
 #[cfg(windows)]
@@ -74,7 +74,8 @@ fn main() -> eframe::Result {
             .with_fullscreen(false)
             .with_maximized(false)
             .with_transparent(true)
-            .with_title("Windows Side Dock"),
+            .with_title("Windows Side Dock")
+            .with_icon(app_icon()),
         ..Default::default()
     };
     let windows_dir = std::env::var("WINDIR").unwrap_or_else(|_| r"C:\Windows".into());
