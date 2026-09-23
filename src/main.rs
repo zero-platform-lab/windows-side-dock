@@ -2,6 +2,8 @@
 
 mod app;
 mod config;
+mod context_menu;
+mod dock;
 mod layout;
 mod model;
 mod platform;

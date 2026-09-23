@@ -110,13 +110,15 @@ Windows 11では「その他のオプションを確認」側に表示される�
 
 ## 技術的負債と次の作業
 
-`src/main.rs` は39行で、起動処理だけを持つ。アプリ状態とDock本体は`app.rs`、右クリック・ウィンドウ選択などの操作UIは`ui.rs`へ分離済み。
+`src/main.rs` は41行で、起動処理だけを持つ。全Rustソースを400行未満へ分割済み。
 
 - `model.rs`: `LauncherItem`、`RunningWindow`、各enum
 - `config.rs`: 設定と登録項目の永続化
 - `windows.rs`: Win32 API、Shell起動、ウィンドウ列挙、アイコン取得
-- `app.rs`: アプリ状態、Dock本体、設定画面
-- `ui.rs`: 右クリックメニュー、ウィンドウ選択、アイコン操作
+- `app.rs`: アプリ状態と操作
+- `dock.rs`: Dock本体と設定画面
+- `context_menu.rs`: 右クリックメニューとウィンドウ選択
+- `ui.rs`: アイコン操作と項目生成
 - `theme.rs`: フォント、色、独自アイコン描画
 
 優先度が高い未完了事項:
