@@ -797,11 +797,7 @@ impl LauncherApp {
                                         .max_height((height - 105.0).max(68.0))
                                         .show(ui, |ui| {
                                             for window in &windows {
-                                                if ui
-                                                    .add_sized(
-                                                        [ui.available_width(), 30.0],
-                                                        egui::Button::new(&window.title),
-                                                    )
+                                                if left_aligned_button(ui, &window.title, 30.0)
                                                     .on_hover_text(&window.title)
                                                     .clicked()
                                                 {
@@ -845,11 +841,7 @@ impl LauncherApp {
                                     .max_height((height - 71.0).max(68.0))
                                     .show(ui, |ui| {
                                         for window in &windows {
-                                            if ui
-                                                .add_sized(
-                                                    [ui.available_width(), 30.0],
-                                                    egui::Button::new(&window.title),
-                                                )
+                                            if left_aligned_button(ui, &window.title, 30.0)
                                                 .on_hover_text(&window.title)
                                                 .clicked()
                                             {
@@ -1314,6 +1306,29 @@ fn load_shell_icon(_path: &str) -> Option<egui::ColorImage> {
 
 fn draw_icon(painter: &egui::Painter, rect: egui::Rect, icon: IconKind) {
     draw_icon_colored(painter, rect, icon, Color32::from_rgb(238, 242, 250));
+}
+
+fn left_aligned_button(ui: &mut egui::Ui, text: &str, height: f32) -> egui::Response {
+    let (rect, response) = ui.allocate_exact_size(
+        egui::vec2(ui.available_width(), height),
+        egui::Sense::click(),
+    );
+    let visuals = ui.style().interact(&response);
+    ui.painter().rect(
+        rect,
+        visuals.corner_radius,
+        visuals.bg_fill,
+        visuals.bg_stroke,
+        egui::StrokeKind::Inside,
+    );
+    ui.painter().with_clip_rect(rect.shrink(7.0)).text(
+        egui::pos2(rect.left() + 9.0, rect.center().y),
+        egui::Align2::LEFT_CENTER,
+        text,
+        egui::TextStyle::Button.resolve(ui.style()),
+        visuals.text_color(),
+    );
+    response
 }
 
 fn draw_icon_colored(painter: &egui::Painter, rect: egui::Rect, icon: IconKind, color: Color32) {
