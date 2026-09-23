@@ -59,14 +59,14 @@ MSI生成:
 
 ## 設定ファイル
 
-アプリ名変更前との互換性を維持するため、保存先のフォルダー名は現在も `lancher` のまま。
+0.1.6から保存先は `%LOCALAPPDATA%\windows-side-dock\`。
 
-- `%LOCALAPPDATA%\lancher\items.txt`
-- `%LOCALAPPDATA%\lancher\settings.txt`
-- `%LOCALAPPDATA%\lancher\process_tool.txt`
-- `%LOCALAPPDATA%\lancher\process_explorer_path.txt`
+- `items.txt`: ユーザー登録項目（`名前|コマンド` を1行ずつ）
+- `settings.txt`: ポップアップ方向
+- `process_tool.txt`: Task Manager／Process Explorer
+- `process_explorer_path.txt`: Process Explorerのパス
 
-保存先を変更する場合は、旧フォルダーからの移行処理を先に実装すること。
+起動時に `config::migrate_legacy_config` が旧保存先 `%LOCALAPPDATA%\lancher\` から上記4ファイルをコピーする。新フォルダーに既にあるファイルは上書きしない。旧フォルダーは削除せず残している（0.1.6への移行は実機確認済み。4ファイルとも内容一致）。旧フォルダーを消す処理を入れる場合は、十分な期間を置いてからにすること。
 
 ## Windows右クリックメニュー
 
@@ -99,18 +99,18 @@ Windows 11では「その他のオプションを確認」側に表示される�
 
 ## テストとカバレッジ
 
-- 現在の自動テスト: 23件（`model.rs`、`config.rs`、`layout.rs`、`ui.rs`、`shell_menu.rs`）
-- 全体行カバレッジ: 15.26%（`cargo llvm-cov --summary-only`）
+- 現在の自動テスト: 29件（`model.rs`、`config.rs`、`layout.rs`、`ui.rs`、`shell_menu.rs`）
+- 全体行カバレッジ: 22.67%（`cargo llvm-cov --summary-only`）
 - `model.rs` 行カバレッジ: 100%
-- `config.rs` 行カバレッジ: 58.92%
+- `config.rs` 行カバレッジ: 66.67%
 - `layout.rs` 行カバレッジ: 11.43%
 - `cargo-llvm-cov 0.9.1` はインストール済み
 
-テスト済み: アプリ同一判定、ウィンドウのグループ化（`model::group_windows`）、タイトル正規化、設定値と `items.txt` の読み書き、`lancher` 保存先パス、ポップアップ位置計算（`layout::beside_x`）、実行ファイルパス正規化。
+テスト済み: アプリ同一判定、ウィンドウのグループ化（`model::group_windows`）、タイトル正規化、設定値と `items.txt` の読み書き、保存先パス、ポップアップ位置計算（`layout::beside_x`）、実行ファイルパス正規化。
 
 テスト方針: Win32 APIやファイルI/Oを呼ぶ関数から純粋関数を切り出し、そちらをテストする。ポップアップ幅は `layout.rs` の `*_WIDTH` 定数を唯一の値とし、表示サイズと位置計算の両方で使うこと（以前、ウィンドウ選択画面の幅だけ変更され、左表示時にDockへ120px重なる不具合があった）。
 
-残り: 旧設定からの移行処理（保存先変更時に実装してテストする）、`app.rs` の状態操作。
+追加でテスト済み: 実行中アプリのピン留め項目への割り当て（`model::assign_running`）、保存対象のユーザー登録項目（`model::registered_entries`、先頭 `BUILTIN_ITEM_COUNT` 件は標準アイコン）、ドロップしたファイルの表示名、旧保存先からの移行。
 
 ## 技術的負債と次の作業
 
@@ -129,8 +129,7 @@ Windows 11では「その他のオプションを確認」側に表示される�
 
 優先度が高い未完了事項:
 
-1. `app.rs` の状態操作（登録・ピン留め・実行中判定）のテスト追加
-2. 設定保存先を `windows-side-dock` へ安全に移行
+なし（2026-09-23時点）。`dock.rs`、`context_menu.rs`、`platform.rs` はUIとWin32 APIが中心で、自動テストの対象外。
 
 GitHub Releasesを使った自動更新はユーザー判断により対象外（2026-09-23）。更新は新しいMSIを手動で実行する方式とする。
 
@@ -142,7 +141,7 @@ GitHub Releasesを使った自動更新はユーザー判断により対象外�
 - インストール先: `%LOCALAPPDATA%\Programs\Windows Side Dock`
 - Package ID: `ZeroPlatformLab.WindowsSideDock`（変更しないこと）
 - バージョン元: `Cargo.toml`
-- 現在のバージョン: `0.1.5`
+- 現在のバージョン: `0.1.6`
 - `build-installer.ps1` はUTF-8のため、Windows PowerShell 5.1ではなくPowerShell 7（`pwsh`）で実行すること
 - `MajorUpgrade`で旧版を置換し、ダウングレードを拒否
 - 同一バージョンの開発用再インストールを許可
@@ -156,6 +155,6 @@ GitHub Releasesを使った自動更新はユーザー判断により対象外�
 ## Gitと作業ツリー
 
 - 変更は小さく分けてコミットする方針
-- 直近の機能コミット: 背景メニューのプロセスツール同期（0.1.4）
+- 直近の機能コミット: 設定保存先の移行（0.1.6）
 - `windows-side-dock-screenshot.png` はユーザー指示によりGitへ追加しない
 - 既存のユーザー変更を破棄する `git reset --hard` 等は使用しない
