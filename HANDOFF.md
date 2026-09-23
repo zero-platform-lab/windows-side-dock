@@ -49,6 +49,7 @@ MSI生成:
 - Dock背景の右クリックメニュー
 - タスクトレイのアイコン（左クリックでDockの表示／非表示、右クリックでDock 設定・システムモニター・終了）
 - アプリのアイコン（`assets/icon.ico`。`scripts/make-icon.py` で生成し、`build.rs` がexeへ埋め込む。トレイはexeのリソース番号1、ウィンドウは `assets/icon-64.rgba` を使う）
+- 設定「Dockを常に手前に表示」（既定はオフ。`always_on_top.txt` に `on`/`off` で保存し、`apply_window_level` が変化時だけウィンドウへ反映）
 - ログオン時の自動起動（MSIが `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` の `WindowsSideDock` を登録・削除）
 
 ## 右クリック操作
@@ -154,7 +155,7 @@ GitHub Releasesを使った自動更新はユーザー判断により対象外�
 - インストール先: `%LOCALAPPDATA%\Programs\Windows Side Dock`
 - Package ID: `ZeroPlatformLab.WindowsSideDock`（変更しないこと）
 - バージョン元: `Cargo.toml`
-- 現在のバージョン: `0.1.15`
+- 現在のバージョン: `0.1.16`
 - `build-installer.ps1` はUTF-8のため、Windows PowerShell 5.1ではなくPowerShell 7（`pwsh`）で実行すること
 - `MajorUpgrade`で旧版を置換し、ダウングレードを拒否
 - 同一バージョンの開発用再インストールを許可

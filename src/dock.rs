@@ -27,6 +27,7 @@ impl LauncherApp {
     /// 1フレーム分の処理。Dock本体と、開いている設定画面・メニューを描く。
     pub(crate) fn show(&mut self, ctx: &egui::Context) {
         self.keep_window_state(ctx);
+        self.apply_window_level(ctx);
         // ウィンドウの変化を見張れていれば変化があったときだけ、見張れなければ一定間隔で数え直す。
         let changes = self.platform.take_window_changes();
         let due = match changes {
@@ -48,6 +49,23 @@ impl LauncherApp {
         }
         self.show_context_menu_viewport(ctx);
         self.show_window_picker_viewport(ctx);
+    }
+
+    /// 「常に手前に表示」の設定が変わったときだけ、Dockのウィンドウへ反映する。
+    fn apply_window_level(&mut self, ctx: &egui::Context) {
+        if self.applied_always_on_top == Some(self.always_on_top) {
+            return;
+        }
+        let level = if self.always_on_top {
+            egui::WindowLevel::AlwaysOnTop
+        } else {
+            egui::WindowLevel::Normal
+        };
+        ctx.send_viewport_cmd_to(
+            egui::ViewportId::ROOT,
+            egui::ViewportCommand::WindowLevel(level),
+        );
+        self.applied_always_on_top = Some(self.always_on_top);
     }
 
     /// Windowsのスナップなどで最大化・全画面化されたら元に戻す。
@@ -291,6 +309,14 @@ impl LauncherApp {
         ui.radio_value(&mut direction, PopupDirection::Right, "常に右");
         if direction != self.popup_direction {
             self.set_popup_direction(direction);
+        }
+        ui.add_space(8.0);
+        let mut always_on_top = self.always_on_top;
+        if ui
+            .checkbox(&mut always_on_top, "Dockを常に手前に表示")
+            .changed()
+        {
+            self.set_always_on_top(always_on_top);
         }
         ui.add_space(12.0);
         ui.label("システムモニター");

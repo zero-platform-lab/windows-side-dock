@@ -418,6 +418,21 @@ fn click(harness: &mut Harness<'static, LauncherApp>, label: &str) {
 }
 
 #[test]
+fn keeps_the_dock_on_top_when_the_setting_is_on() {
+    let (mut harness, _platform) = settings("dock-on-top");
+    let normal = egui::ViewportCommand::WindowLevel(egui::WindowLevel::Normal);
+    let on_top = egui::ViewportCommand::WindowLevel(egui::WindowLevel::AlwaysOnTop);
+    assert_eq!(harness.state().applied_always_on_top, Some(false));
+    assert!(!step_commands(&mut harness).contains(&normal));
+    click(&mut harness, "Dockを常に手前に表示");
+    assert!(harness.state().always_on_top);
+    assert!(harness.state().config.load_always_on_top());
+    assert_eq!(harness.state().applied_always_on_top, Some(true));
+    harness.state_mut().applied_always_on_top = None;
+    assert!(step_commands(&mut harness).contains(&on_top));
+}
+
+#[test]
 fn saves_popup_direction_and_process_tool_from_settings() {
     let (mut harness, _platform) = settings("settings-radios");
     click(&mut harness, "常に右");

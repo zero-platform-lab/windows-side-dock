@@ -20,6 +20,8 @@ const ITEMS_FILE: &str = "items.txt";
 const POPUP_DIRECTION_FILE: &str = "settings.txt";
 const PROCESS_TOOL_FILE: &str = "process_tool.txt";
 const PROCESS_EXPLORER_PATH_FILE: &str = "process_explorer_path.txt";
+/// 0.1.16で追加。旧保存先には存在しないため移行対象に含めない。
+const ALWAYS_ON_TOP_FILE: &str = "always_on_top.txt";
 const CONFIG_FILES: [&str; 4] = [
     ITEMS_FILE,
     POPUP_DIRECTION_FILE,
@@ -112,6 +114,16 @@ impl ConfigStore {
 
     pub(crate) fn save_process_explorer_path(&self, value: &str) {
         self.write(PROCESS_EXPLORER_PATH_FILE, value.trim());
+    }
+
+    /// Dockをほかのウィンドウより常に手前に出すか。既定は出さない。
+    pub(crate) fn load_always_on_top(&self) -> bool {
+        self.read(ALWAYS_ON_TOP_FILE)
+            .is_some_and(|value| value.trim() == "on")
+    }
+
+    pub(crate) fn save_always_on_top(&self, enabled: bool) {
+        self.write(ALWAYS_ON_TOP_FILE, if enabled { "on" } else { "off" });
     }
 }
 
@@ -220,6 +232,7 @@ mod tests {
         config.save_popup_direction(PopupDirection::Left);
         config.save_process_tool(ProcessTool::ProcessExplorer);
         config.save_process_explorer_path("  E:\\procexp.exe \n");
+        config.save_always_on_top(true);
 
         let reloaded = store(&root);
         assert_eq!(
@@ -228,6 +241,9 @@ mod tests {
         );
         assert_eq!(reloaded.load_popup_direction(), PopupDirection::Left);
         assert_eq!(reloaded.load_process_tool(), ProcessTool::ProcessExplorer);
+        assert!(reloaded.load_always_on_top());
+        reloaded.save_always_on_top(false);
+        assert!(!reloaded.load_always_on_top());
         assert_eq!(reloaded.load_process_explorer_path(), r"E:\procexp.exe");
         assert!(root
             .join("windows-side-dock")
@@ -243,6 +259,7 @@ mod tests {
         assert!(config.load_registered_items().is_empty());
         assert_eq!(config.load_popup_direction(), PopupDirection::Auto);
         assert_eq!(config.load_process_tool(), ProcessTool::TaskManager);
+        assert!(!config.load_always_on_top());
         assert_eq!(config.load_process_explorer_path(), "");
     }
 

@@ -35,6 +35,10 @@ pub(crate) struct LauncherApp {
     pub(crate) show_settings: bool,
     pub(crate) font_size: f32,
     pub(crate) popup_direction: PopupDirection,
+    /// Dockを常に手前に出すか。
+    pub(crate) always_on_top: bool,
+    /// Dockのウィンドウへ最後に反映した「常に手前」の状態。まだなら `None`。
+    pub(crate) applied_always_on_top: Option<bool>,
     pub(crate) context_menu: Option<(ContextMenuTarget, egui::Pos2, Instant)>,
     /// 開いている右クリックメニューの中身の大きさ。開いた直後の非表示フレームで測る。
     pub(crate) context_menu_size: Option<egui::Vec2>,
@@ -98,6 +102,8 @@ impl LauncherApp {
             show_settings: false,
             font_size: 13.0,
             popup_direction: config.load_popup_direction(),
+            always_on_top: config.load_always_on_top(),
+            applied_always_on_top: None,
             context_menu: None,
             context_menu_size: None,
             window_picker: None,
@@ -277,6 +283,11 @@ impl LauncherApp {
     pub(crate) fn set_popup_direction(&mut self, direction: PopupDirection) {
         self.popup_direction = direction;
         self.config.save_popup_direction(direction);
+    }
+
+    pub(crate) fn set_always_on_top(&mut self, enabled: bool) {
+        self.always_on_top = enabled;
+        self.config.save_always_on_top(enabled);
     }
 
     pub(crate) fn set_process_tool(&mut self, tool: ProcessTool) {
