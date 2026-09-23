@@ -2,6 +2,25 @@ use crate::config::PopupDirection;
 use eframe::egui::{self, Color32};
 use std::time::{Duration, Instant};
 
+pub(crate) const SETTINGS_WIDTH: f32 = 380.0;
+pub(crate) const TOOLTIP_WIDTH: f32 = 220.0;
+pub(crate) const CONTEXT_MENU_WIDTH: f32 = 210.0;
+pub(crate) const WINDOW_PICKER_WIDTH: f32 = 480.0;
+
+/// 基準範囲の左右どちらかへ、幅 `width` のポップアップを `gap` だけ離して置くときの左端X座標。
+fn beside_x(anchor_left: f32, anchor_right: f32, open_left: bool, width: f32, gap: f32) -> f32 {
+    if open_left {
+        anchor_left - width - gap
+    } else {
+        anchor_right + gap
+    }
+}
+
+#[cfg_attr(not(windows), allow(dead_code))]
+fn center_in_right_half(left: i32, right: i32, screen_width: i32) -> bool {
+    (left + right) / 2 > screen_width / 2
+}
+
 #[cfg(windows)]
 pub(crate) fn popup_should_open_left(_ctx: &egui::Context) -> bool {
     use std::os::windows::ffi::OsStrExt;
@@ -23,7 +42,7 @@ pub(crate) fn popup_should_open_left(_ctx: &egui::Context) -> bool {
         return true;
     }
     let screen_width = unsafe { GetSystemMetrics(0) };
-    (rect.left + rect.right) / 2 > screen_width / 2
+    center_in_right_half(rect.left, rect.right, screen_width)
 }
 
 #[cfg(windows)]
@@ -90,11 +109,13 @@ pub(crate) fn settings_dialog_position(
             PopupDirection::Left => true,
             PopupDirection::Right => false,
         };
-        let x = if open_left {
-            rect.left as f32 - 392.0
-        } else {
-            rect.right as f32 + 12.0
-        };
+        let x = beside_x(
+            rect.left as f32,
+            rect.right as f32,
+            open_left,
+            SETTINGS_WIDTH,
+            12.0,
+        );
         egui::pos2(x, rect.top as f32)
     } else {
         egui::pos2(100.0, 100.0)
@@ -150,7 +171,7 @@ pub(crate) fn directional_tooltip(
         egui::ViewportId::from_hash_of(("launcher-tooltip", response.id)),
         egui::ViewportBuilder::default()
             .with_title("Launcher tooltip")
-            .with_inner_size([220.0, 36.0])
+            .with_inner_size([TOOLTIP_WIDTH, 36.0])
             .with_position(position)
             .with_decorations(false)
             .with_resizable(false)
@@ -186,11 +207,13 @@ pub(crate) fn context_menu_screen_position(open_left: bool) -> Option<egui::Pos2
     if unsafe { GetCursorPos(&mut cursor) } == 0 {
         return None;
     }
-    let x = if open_left {
-        cursor.x as f32 - 218.0
-    } else {
-        cursor.x as f32 + 8.0
-    };
+    let x = beside_x(
+        cursor.x as f32,
+        cursor.x as f32,
+        open_left,
+        CONTEXT_MENU_WIDTH,
+        8.0,
+    );
     Some(egui::pos2(x, cursor.y as f32))
 }
 
@@ -202,11 +225,13 @@ pub(crate) fn window_picker_screen_position(open_left: bool) -> Option<egui::Pos
     if unsafe { GetCursorPos(&mut cursor) } == 0 {
         return None;
     }
-    let x = if open_left {
-        cursor.x as f32 - 368.0
-    } else {
-        cursor.x as f32 + 8.0
-    };
+    let x = beside_x(
+        cursor.x as f32,
+        cursor.x as f32,
+        open_left,
+        WINDOW_PICKER_WIDTH,
+        8.0,
+    );
     Some(egui::pos2(x, cursor.y as f32))
 }
 
@@ -238,11 +263,13 @@ pub(crate) fn tooltip_screen_position(
     if window.is_null() || unsafe { GetWindowRect(window, &mut rect) } == 0 {
         return None;
     }
-    let x = if open_left {
-        rect.left as f32 - 228.0
-    } else {
-        rect.right as f32 + 8.0
-    };
+    let x = beside_x(
+        rect.left as f32,
+        rect.right as f32,
+        open_left,
+        TOOLTIP_WIDTH,
+        8.0,
+    );
     let y = rect.top as f32 + response.rect.center().y - 18.0;
     Some(egui::pos2(x, y.max(0.0)))
 }
@@ -252,11 +279,13 @@ pub(crate) fn tooltip_screen_position(
     response: &egui::Response,
     open_left: bool,
 ) -> Option<egui::Pos2> {
-    let x = if open_left {
-        response.rect.left() - 228.0
-    } else {
-        response.rect.right() + 8.0
-    };
+    let x = beside_x(
+        response.rect.left(),
+        response.rect.right(),
+        open_left,
+        TOOLTIP_WIDTH,
+        8.0,
+    );
     Some(egui::pos2(x, response.rect.top()))
 }
 
@@ -307,4 +336,30 @@ pub(crate) fn dock_geometry() -> ([f32; 2], [f32; 2]) {
 #[cfg(not(windows))]
 pub(crate) fn dock_geometry() -> ([f32; 2], [f32; 2]) {
     ([0.0, 60.0], [54.0, 800.0])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn places_popup_beside_anchor_without_overlap() {
+        for width in [
+            SETTINGS_WIDTH,
+            TOOLTIP_WIDTH,
+            CONTEXT_MENU_WIDTH,
+            WINDOW_PICKER_WIDTH,
+        ] {
+            let left = beside_x(1800.0, 1854.0, true, width, 8.0);
+            assert_eq!(left + width + 8.0, 1800.0);
+            assert_eq!(beside_x(1800.0, 1854.0, false, width, 8.0), 1862.0);
+        }
+    }
+
+    #[test]
+    fn detects_which_half_of_screen_holds_the_dock() {
+        assert!(center_in_right_half(1854, 1908, 1920));
+        assert!(!center_in_right_half(12, 66, 1920));
+        assert!(!center_in_right_half(930, 990, 1920));
+    }
 }

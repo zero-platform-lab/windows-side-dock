@@ -5,7 +5,7 @@ use crate::config::{
 };
 use crate::layout::{
     context_menu_screen_position, current_date_time, directional_tooltip, launcher_window_position,
-    settings_dialog_position,
+    settings_dialog_position, SETTINGS_WIDTH,
 };
 use crate::model::IconKind;
 use crate::theme::draw_icon_colored;
@@ -232,7 +232,7 @@ impl App for LauncherApp {
                 egui::ViewportId::from_hash_of("launcher-settings"),
                 egui::ViewportBuilder::default()
                     .with_title("Windows Side Dock 設定")
-                    .with_inner_size([380.0, 430.0])
+                    .with_inner_size([SETTINGS_WIDTH, 430.0])
                     .with_min_inner_size([360.0, 400.0])
                     .with_position(position)
                     .with_resizable(false)

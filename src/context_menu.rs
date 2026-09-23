@@ -1,5 +1,6 @@
 use crate::app::{ContextMenuTarget, LauncherApp};
 use crate::config::ProcessTool;
+use crate::layout::{CONTEXT_MENU_WIDTH, WINDOW_PICKER_WIDTH};
 use crate::platform::{activate_taskbar_item, close_all_windows, open_target};
 use crate::theme::left_aligned_button;
 use crate::ui::{dock_directory, normalized_executable_path};
@@ -45,7 +46,7 @@ impl LauncherApp {
             egui::ViewportId::from_hash_of("launcher-window-picker"),
             egui::ViewportBuilder::default()
                 .with_title(format!("{name} のウィンドウ"))
-                .with_inner_size([480.0, height])
+                .with_inner_size([WINDOW_PICKER_WIDTH, height])
                 .with_position(position)
                 .with_resizable(false)
                 .with_taskbar(false)
@@ -144,13 +145,18 @@ impl LauncherApp {
             }
             _ => 0,
         };
-        let width = if window_count > 0 { 430.0 } else { 210.0 };
-        let position =
-            if width > 210.0 && self.popup_direction.alignment(ctx) == egui::RectAlign::LEFT {
-                egui::pos2(position.x - (width - 210.0), position.y)
-            } else {
-                position
-            };
+        let width = if window_count > 0 {
+            430.0
+        } else {
+            CONTEXT_MENU_WIDTH
+        };
+        let position = if width > CONTEXT_MENU_WIDTH
+            && self.popup_direction.alignment(ctx) == egui::RectAlign::LEFT
+        {
+            egui::pos2(position.x - (width - CONTEXT_MENU_WIDTH), position.y)
+        } else {
+            position
+        };
         let mut close = false;
         ctx.show_viewport_immediate(
             egui::ViewportId::from_hash_of("launcher-context-menu"),
