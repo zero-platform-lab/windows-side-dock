@@ -316,6 +316,11 @@ impl App for LauncherApp {
             )
             .show(ctx, |ui| {
                 let area = ui.max_rect();
+                let background_response = ui.interact(
+                    area,
+                    ui.id().with("launcher-background-context"),
+                    egui::Sense::click(),
+                );
                 let bands = 28;
                 for band in 0..bands {
                     let t = band as f32 / (bands - 1) as f32;
@@ -454,6 +459,15 @@ impl App for LauncherApp {
                         ));
                     }
                 });
+                if background_response.secondary_clicked() {
+                    if let Some(position) = context_menu_screen_position(
+                        self.popup_direction.alignment(ctx) == egui::RectAlign::LEFT,
+                    ) {
+                        self.context_menu =
+                            Some((ContextMenuTarget::Handle, position, Instant::now()));
+                        self.confirm_close_all = false;
+                    }
+                }
             });
 
         if self.show_settings {
