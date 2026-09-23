@@ -1,26 +1,19 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod config;
 mod model;
 
+use config::{
+    choose_process_explorer_file, config_path, load_popup_direction, load_process_explorer_path,
+    load_process_tool, save_popup_direction, save_process_explorer_path, save_process_tool,
+    PopupDirection, ProcessTool,
+};
 use eframe::egui::{self, Color32, Key};
 use eframe::{App, Frame};
 use model::{friendly_window_name, same_application, IconKind, LauncherItem, RunningWindow};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
-
-#[derive(Clone, Copy, PartialEq)]
-enum PopupDirection {
-    Auto,
-    Left,
-    Right,
-}
-
-#[derive(Clone, Copy, PartialEq)]
-enum ProcessTool {
-    TaskManager,
-    ProcessExplorer,
-}
 
 #[derive(Clone, Copy)]
 enum ContextMenuTarget {
@@ -1462,132 +1455,6 @@ fn draw_icon_colored(painter: &egui::Painter, rect: egui::Rect, icon: IconKind, 
             }
         }
     }
-}
-
-fn config_path() -> Option<PathBuf> {
-    std::env::var_os("LOCALAPPDATA").map(|root| PathBuf::from(root).join(r"lancher\items.txt"))
-}
-
-fn settings_path() -> Option<PathBuf> {
-    std::env::var_os("LOCALAPPDATA").map(|root| PathBuf::from(root).join(r"lancher\settings.txt"))
-}
-
-fn load_popup_direction() -> PopupDirection {
-    let Some(path) = settings_path() else {
-        return PopupDirection::Auto;
-    };
-    match std::fs::read_to_string(path).as_deref().map(str::trim) {
-        Ok("left") => PopupDirection::Left,
-        Ok("right") => PopupDirection::Right,
-        _ => PopupDirection::Auto,
-    }
-}
-
-fn save_popup_direction(direction: PopupDirection) {
-    let Some(path) = settings_path() else { return };
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let value = match direction {
-        PopupDirection::Auto => "auto",
-        PopupDirection::Left => "left",
-        PopupDirection::Right => "right",
-    };
-    let _ = std::fs::write(path, value);
-}
-
-fn process_tool_path() -> Option<PathBuf> {
-    std::env::var_os("LOCALAPPDATA")
-        .map(|root| PathBuf::from(root).join(r"lancher\process_tool.txt"))
-}
-
-fn process_explorer_path_file() -> Option<PathBuf> {
-    std::env::var_os("LOCALAPPDATA")
-        .map(|root| PathBuf::from(root).join(r"lancher\process_explorer_path.txt"))
-}
-
-fn load_process_tool() -> ProcessTool {
-    let Some(path) = process_tool_path() else {
-        return ProcessTool::TaskManager;
-    };
-    match std::fs::read_to_string(path).as_deref().map(str::trim) {
-        Ok("process_explorer") => ProcessTool::ProcessExplorer,
-        _ => ProcessTool::TaskManager,
-    }
-}
-
-fn save_process_tool(tool: ProcessTool) {
-    let Some(path) = process_tool_path() else {
-        return;
-    };
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let value = match tool {
-        ProcessTool::TaskManager => "task_manager",
-        ProcessTool::ProcessExplorer => "process_explorer",
-    };
-    let _ = std::fs::write(path, value);
-}
-
-fn load_process_explorer_path() -> String {
-    let Some(path) = process_explorer_path_file() else {
-        return String::new();
-    };
-    std::fs::read_to_string(path)
-        .map(|value| value.trim().to_owned())
-        .unwrap_or_default()
-}
-
-fn save_process_explorer_path(value: &str) {
-    let Some(path) = process_explorer_path_file() else {
-        return;
-    };
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let _ = std::fs::write(path, value.trim());
-}
-
-#[cfg(windows)]
-fn choose_process_explorer_file() -> Option<String> {
-    use std::os::windows::ffi::OsStrExt;
-    use windows_sys::Win32::UI::Controls::Dialogs::{
-        GetOpenFileNameW, OFN_FILEMUSTEXIST, OFN_PATHMUSTEXIST, OPENFILENAMEW,
-    };
-    use windows_sys::Win32::UI::WindowsAndMessaging::FindWindowW;
-
-    let owner_title: Vec<u16> = std::ffi::OsStr::new("Windows Side Dock 設定")
-        .encode_wide()
-        .chain(Some(0))
-        .collect();
-    let dialog_title: Vec<u16> = std::ffi::OsStr::new("Process Explorerを選択")
-        .encode_wide()
-        .chain(Some(0))
-        .collect();
-    let filter: Vec<u16> = "実行ファイル (*.exe)\0*.exe\0すべてのファイル\0*.*\0\0"
-        .encode_utf16()
-        .collect();
-    let mut file_buffer = vec![0_u16; 32768];
-    let mut options = OPENFILENAMEW::default();
-    options.lStructSize = std::mem::size_of::<OPENFILENAMEW>() as u32;
-    options.hwndOwner = unsafe { FindWindowW(std::ptr::null(), owner_title.as_ptr()) };
-    options.lpstrFilter = filter.as_ptr();
-    options.lpstrFile = file_buffer.as_mut_ptr();
-    options.nMaxFile = file_buffer.len() as u32;
-    options.lpstrTitle = dialog_title.as_ptr();
-    options.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST;
-
-    if unsafe { GetOpenFileNameW(&mut options) } == 0 {
-        return None;
-    }
-    let length = file_buffer.iter().position(|&value| value == 0)?;
-    Some(String::from_utf16_lossy(&file_buffer[..length]))
-}
-
-#[cfg(not(windows))]
-fn choose_process_explorer_file() -> Option<String> {
-    None
 }
 
 #[cfg(windows)]
